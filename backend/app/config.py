@@ -334,9 +334,21 @@ class Settings(BaseSettings):
     @classmethod
     def parse_cors_origins(cls, v):
         """Parse CORS origins from string or list."""
+        # Handle None or empty string
+        if v is None or v == '':
+            return ["http://localhost:3000", "http://localhost:5173"]
+        
+        # Handle string (comma-separated)
         if isinstance(v, str):
-            return [origin.strip() for origin in v.split(',')]
-        return v
+            origins = [origin.strip() for origin in v.split(',') if origin.strip()]
+            return origins if origins else ["http://localhost:3000", "http://localhost:5173"]
+        
+        # Handle list
+        if isinstance(v, list):
+            return v
+        
+        # Fallback to default
+        return ["http://localhost:3000", "http://localhost:5173"]
     
     # ============================================================================
     # Pydantic Settings Configuration
