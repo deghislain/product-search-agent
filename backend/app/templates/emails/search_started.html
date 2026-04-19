@@ -1,0 +1,70 @@
+{% extends "emails/base.html" %}
+{% block content %}
+    <h2 style="color: #1F2937; margin-top: 0;">Search Started! 🚀</h2>
+    <p style="color: #4B5563; font-size: 16px;">
+        Your product search has been activated and is now running.
+    </p>
+    
+    <!-- Search Details Card -->
+    <div style="background: #EFF6FF; border: 1px solid #BFDBFE; border-radius: 8px; padding: 20px; margin: 20px 0;">
+        <h3 style="color: #1E40AF; margin-top: 0;">Search Details</h3>
+        
+        <table style="width: 100%;">
+            <tr>
+                <td style="padding: 8px 0; color: #6B7280; width: 40%;">
+                    <strong>Product:</strong>
+                </td>
+                <td style="padding: 8px 0; color: #1F2937;">
+                    {{ search_request.product_name }}
+                </td>
+            </tr>
+            <tr>
+                <td style="padding: 8px 0; color: #6B7280;">
+                    <strong>Budget:</strong>
+                </td>
+                <td style="padding: 8px 0; color: #1F2937; font-weight: bold;">
+                    ${{ search_request.budget }}
+                </td>
+            </tr>
+            <tr>
+                <td style="padding: 8px 0; color: #6B7280;">
+                    <strong>Platforms:</strong>
+                </td>
+                <td style="padding: 8px 0; color: #1F2937;">
+                    {{ search_request.platforms|join(', ') }}
+                </td>
+            </tr>
+            <tr>
+                <td style="padding: 8px 0; color: #6B7280;">
+                    <strong>Search Frequency:</strong>
+                </td>
+                <td style="padding: 8px 0; color: #1F2937;">
+                    Every {{ search_request.search_interval }} hours
+                </td>
+            </tr>
+        </table>
+    </div>
+    
+    <!-- What Happens Next -->
+    <div style="background: #F9FAFB; border-left: 4px solid #4F46E5; padding: 15px; margin: 20px 0;">
+        <h4 style="color: #1F2937; margin-top: 0;">What happens next?</h4>
+        <ul style="color: #4B5563; margin: 10px 0; padding-left: 20px;">
+            <li style="margin: 8px 0;">We'll search for products matching your criteria</li>
+            <li style="margin: 8px 0;">You'll receive email notifications when matches are found</li>
+            <li style="margin: 8px 0;">Searches run automatically every {{ search_request.search_interval }} hours</li>
+            <li style="margin: 8px 0;">You can pause or modify your search anytime</li>
+        </ul>
+    </div>
+    
+    <p style="color: #6B7280; font-size: 14px; margin-top: 20px;">
+        Started on {{ search_request.created_at.strftime('%B %d, %Y at %I:%M %p') }}
+    </p>
+    
+    <div style="text-align: center; margin-top: 30px;">
+        <a href="#" 
+           style="display: inline-block; background: #4F46E5; color: white; padding: 12px 24px; 
+                  text-decoration: none; border-radius: 6px; font-weight: bold;">
+            View Dashboard
+        </a>
+    </div>
+{% endblock %}

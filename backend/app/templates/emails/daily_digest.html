@@ -1,0 +1,50 @@
+{% extends "emails/base.html" %}
+{% block content %}
+    <h2 style="color: #1F2937; margin-top: 0;">Daily Digest 📊</h2>
+    <p style="color: #4B5563; font-size: 16px;">
+        Here's your daily summary of product matches for {{ date.strftime('%B %d, %Y') }}
+    </p>
+    
+    {% if matches %}
+        <p style="color: #1F2937; font-size: 18px; font-weight: bold;">
+            Found {{ matches|length }} new matches today!
+        </p>
+        
+        {% for match in matches %}
+        <!-- Product Card -->
+        <div style="background: #F9FAFB; border: 1px solid #E5E7EB; border-radius: 8px; padding: 15px; margin: 15px 0;">
+            <h3 style="color: #1F2937; margin-top: 0; font-size: 18px;">{{ match.product.title }}</h3>
+            
+            <p style="color: #6B7280; margin: 5px 0;">
+                <strong>Search:</strong> {{ match.search_query }}
+            </p>
+            <p style="color: #6B7280; margin: 5px 0;">
+                <strong>Price:</strong> <span style="color: #1F2937; font-size: 16px; font-weight: bold;">${{ match.product.price }}</span>
+            </p>
+            <p style="color: #6B7280; margin: 5px 0;">
+                <strong>Platform:</strong> {{ match.product.platform }}
+            </p>
+            <p style="color: #6B7280; margin: 5px 0;">
+                <strong>Match Score:</strong> {{ match.product.match_score }}%
+            </p>
+            
+            <a href="{{ match.product.url }}" 
+               style="display: inline-block; background: #4F46E5; color: white; padding: 10px 20px; 
+                      text-decoration: none; border-radius: 6px; margin-top: 10px;">
+                View Product →
+            </a>
+        </div>
+        {% endfor %}
+    {% else %}
+        <div style="background: #FEF3C7; border: 1px solid #FCD34D; border-radius: 8px; padding: 20px; margin: 20px 0;">
+            <p style="color: #92400E; margin: 0;">
+                No new matches found today. We'll keep searching for you!
+            </p>
+        </div>
+    {% endif %}
+    
+    <p style="color: #6B7280; font-size: 14px; margin-top: 30px; padding-top: 20px; border-top: 1px solid #E5E7EB;">
+        You're receiving this daily digest because you have active search requests. 
+        <a href="#" style="color: #4F46E5;">Manage your preferences</a>
+    </p>
+{% endblock %}

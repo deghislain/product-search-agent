@@ -1,0 +1,50 @@
+
+{% extends "emails/base.html" %}
+{% block content %}
+    <h2 style="color: #1F2937; margin-top: 0;">New Match Found! 🎉</h2>
+    <p style="color: #4B5563; font-size: 16px;">
+        We found a product matching your search: <strong>{{ search_query }}</strong>
+    </p>
+    
+    <!-- Product Card -->
+    <div style="background: #F9FAFB; border: 1px solid #E5E7EB; border-radius: 8px; padding: 20px; margin: 20px 0;">
+        <h3 style="color: #1F2937; margin-top: 0; font-size: 20px;">{{ product.title }}</h3>
+        
+        <table style="width: 100%; margin: 15px 0;">
+            <tr>
+                <td style="padding: 5px 0; color: #6B7280;">
+                    <strong>Price:</strong>
+                </td>
+                <td style="padding: 5px 0; color: #1F2937; font-size: 18px; font-weight: bold;">
+                    ${{ product.price }}
+                </td>
+            </tr>
+            <tr>
+                <td style="padding: 5px 0; color: #6B7280;">
+                    <strong>Platform:</strong>
+                </td>
+                <td style="padding: 5px 0; color: #1F2937;">
+                    {{ product.platform }}
+                </td>
+            </tr>
+            <tr>
+                <td style="padding: 5px 0; color: #6B7280;">
+                    <strong>Match Score:</strong>
+                </td>
+                <td style="padding: 5px 0; color: #1F2937;">
+                    {{ product.match_score }}%
+                </td>
+            </tr>
+        </table>
+        
+        <a href="{{ product.url }}" 
+           style="display: inline-block; background: #4F46E5; color: white; padding: 12px 24px; 
+                  text-decoration: none; border-radius: 6px; margin-top: 10px; font-weight: bold;">
+            View Product →
+        </a>
+    </div>
+    
+    <p style="color: #6B7280; font-size: 14px; margin-top: 20px;">
+        This product was found on {{ product.created_at.strftime('%B %d, %Y at %I:%M %p') }}
+    </p>
+{% endblock %}
