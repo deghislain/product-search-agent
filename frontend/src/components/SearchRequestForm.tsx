@@ -55,7 +55,7 @@ export default function SearchRequestForm({
         if (parseFloat(value) <= 0) return 'Budget must be greater than 0';
         return null;
       },
-      platforms: (value) => {
+      platforms: (_value) => {
         // No validation needed - empty platforms array means "search all platforms"
         return null;
       },
