@@ -17,8 +17,8 @@ apscheduler==3.10.4
 
 # Text Processing and Matching
 rapidfuzz==3.5.2
-spacy==3.8.7
-en-core-web-sm @ https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.7.1/en_core_web_sm-3.7.1-py3-none-any.whl
+spacy==3.7.1
+https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.7.1/en_core_web_sm-3.7.1-py3-none-any.whl
 
 # Email
 aiosmtplib==3.0.1
