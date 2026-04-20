@@ -133,10 +133,10 @@ export function useWebSocket(options: UseWebSocketOptions): UseWebSocketReturn {
   useEffect(() => {
     if (!isConnected) return;
 
-    // Send ping every 30 seconds
+    // Send ping every 45 seconds (less than backend's 60 second timeout)
     const pingInterval = setInterval(() => {
       sendMessage('ping');
-    }, 30000);
+    }, 45000);
 
     return () => clearInterval(pingInterval);
   }, [isConnected, sendMessage]);
