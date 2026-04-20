@@ -227,9 +227,9 @@ class Settings(BaseSettings):
     # ============================================================================
     # CORS Settings
     # ============================================================================
-    cors_origins: List[str] = Field(
-        default=["http://localhost:3000", "http://localhost:5173"],
-        description="Allowed CORS origins"
+    cors_origins: str | List[str] = Field(
+        default="http://localhost:3000,http://localhost:5173",
+        description="Allowed CORS origins (comma-separated string or list)"
     )
     cors_allow_credentials: bool = Field(
         default=True,
@@ -336,19 +336,31 @@ class Settings(BaseSettings):
         """Parse CORS origins from string or list."""
         # Handle None or empty string
         if v is None or v == '':
-            return ["http://localhost:3000", "http://localhost:5173"]
+            return "http://localhost:3000,http://localhost:5173"
         
-        # Handle string (comma-separated)
+        # Handle string (comma-separated) - return as-is for now
+        if isinstance(v, str):
+            # If it's already a comma-separated string, return it
+            if ',' in v:
+                return v
+            # If it's a single origin, return it
+            return v if v.strip() else "http://localhost:3000,http://localhost:5173"
+        
+        # Handle list - convert to comma-separated string
+        if isinstance(v, list):
+            return ','.join(v) if v else "http://localhost:3000,http://localhost:5173"
+        
+        # Fallback to default
+        return "http://localhost:3000,http://localhost:5173"
+    
+    @field_validator('cors_origins', mode='after')
+    @classmethod
+    def convert_cors_origins_to_list(cls, v):
+        """Convert CORS origins string to list after validation."""
         if isinstance(v, str):
             origins = [origin.strip() for origin in v.split(',') if origin.strip()]
             return origins if origins else ["http://localhost:3000", "http://localhost:5173"]
-        
-        # Handle list
-        if isinstance(v, list):
-            return v
-        
-        # Fallback to default
-        return ["http://localhost:3000", "http://localhost:5173"]
+        return v
     
     # ============================================================================
     # Pydantic Settings Configuration
