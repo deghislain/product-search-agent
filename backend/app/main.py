@@ -60,6 +60,7 @@ app = FastAPI(
         "name": "MIT",
         "url": "https://opensource.org/licenses/MIT",
     },
+    redirect_slashes=False,  # Disable automatic trailing slash redirects to prevent CORS issues
 )
 # Include scheduler routes
 app.include_router(scheduler_routes.router)
