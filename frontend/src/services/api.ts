@@ -107,7 +107,7 @@ export interface EmailPreferences {
 
 export const getEmailPreferences = async (): Promise<EmailPreferences | null> => {
   try {
-    const response = await apiClient.get('/api/email-preferences');
+    const response = await apiClient.get('/api/email-preferences/');
     return response.data;
   } catch (error) {
     console.error('Failed to fetch email preferences:', error);
@@ -116,7 +116,7 @@ export const getEmailPreferences = async (): Promise<EmailPreferences | null> =>
 };
 
 export const updateEmailPreferences = async (preferences: EmailPreferences): Promise<void> => {
-  await apiClient.post('/api/email-preferences', preferences);
+  await apiClient.post('/api/email-preferences/', preferences);
 };
 
 export default apiClient;

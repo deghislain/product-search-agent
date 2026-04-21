@@ -30,7 +30,7 @@ export interface Product {
 
 // GET all search requests
 export const getSearchRequests = async (): Promise<SearchRequest[]> => {
-  const response = await apiClient.get('/api/search-requests');
+  const response = await apiClient.get('/api/search-requests/');
   
   if (response.data.items) {
     return response.data.items.map((item: any) => {
@@ -87,7 +87,7 @@ export const createSearchRequest = async (data: Omit<SearchRequest, 'id' | 'stat
     search_facebook: data.platforms.includes('facebook'),
   };
   
-  const response = await apiClient.post('/api/search-requests', backendData);
+  const response = await apiClient.post('/api/search-requests/', backendData);
   
   // Build platforms array from response
   const platforms: string[] = [];
