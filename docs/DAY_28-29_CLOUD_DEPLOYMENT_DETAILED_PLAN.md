@@ -294,8 +294,8 @@ git add .
 # Create first commit
 git commit -m "Initial commit: Product Search Agent"
 
-# Add remote repository
-git remote add origin https://github.com/YOUR_USERNAME/product-search-agent.git
+# Add remote repository https://github.com/deghislain/product-search-agent
+git remote add origin https://github.com/deghislain/product-search-agent.git
 
 # Push to GitHub
 git branch -M main
