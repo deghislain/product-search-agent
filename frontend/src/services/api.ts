@@ -7,10 +7,14 @@ import axios from 'axios';
 // Get API base URL from environment variables
 // Development: http://localhost:8000 (from .env.development)
 // Production: https://your-backend.onrender.com (from .env.production)
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_URL || 'http://localhost:8000';
+
+// WebSocket URL for real-time notifications
+export const WS_URL = import.meta.env.VITE_WS_URL || 'ws://localhost:8000/ws';
 
 // Log the API URL being used (helpful for debugging)
 console.log('API Base URL:', API_BASE_URL);
+console.log('WebSocket URL:', WS_URL);
 console.log('Environment:', import.meta.env.MODE);
 
 // ============================================================================

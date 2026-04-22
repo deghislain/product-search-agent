@@ -64,13 +64,34 @@ app = FastAPI(
 )
 # Include scheduler routes
 app.include_router(scheduler_routes.router)
+
 # Configure CORS (Cross-Origin Resource Sharing)
 # This allows the frontend to communicate with the API
-# CORS origins can be configured via CORS_ORIGINS environment variable
-# Example: CORS_ORIGINS="http://localhost:5173,https://yourdomain.com"
+import os
+
+# Build CORS origins list
+origins = [
+    settings.frontend_url,
+    "http://localhost:5173",  # Local development
+    "http://localhost:3000",  # Alternative local port
+]
+
+# Add Render-specific origins if deployed on Render
+if os.getenv("RENDER"):
+    # Add Render frontend URL if provided
+    frontend_service = os.getenv("FRONTEND_SERVICE_NAME", "product-search-frontend")
+    origins.append(f"https://{frontend_service}.onrender.com")
+
+# Add any additional origins from settings
+if isinstance(settings.cors_origins, list):
+    origins.extend(settings.cors_origins)
+
+# Remove duplicates while preserving order
+origins = list(dict.fromkeys(origins))
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.cors_origins,
+    allow_origins=origins,
     allow_credentials=settings.cors_allow_credentials,
     allow_methods=settings.cors_allow_methods,
     allow_headers=settings.cors_allow_headers,
@@ -241,10 +262,15 @@ if __name__ == "__main__":
     # This allows running the app directly with: python -m app.main
     # However, it's recommended to use uvicorn command instead
     import uvicorn
+    import os
+    
+    # Render provides PORT environment variable
+    port = int(os.environ.get("PORT", 8000))
+    
     uvicorn.run(
         "app.main:app",
         host="0.0.0.0",
-        port=8000,
+        port=port,
         reload=True,
         log_level="info"
     )

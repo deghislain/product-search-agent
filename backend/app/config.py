@@ -74,6 +74,14 @@ class Settings(BaseSettings):
         description="Echo SQL queries to console"
     )
     
+    @field_validator('database_url', mode='after')
+    @classmethod
+    def convert_postgres_url(cls, v: str) -> str:
+        """Convert postgres:// to postgresql:// for SQLAlchemy compatibility."""
+        if v and v.startswith("postgres://"):
+            return v.replace("postgres://", "postgresql://", 1)
+        return v
+    
     # ============================================================================
     # Redis Configuration (Optional - for caching)
     # ============================================================================
@@ -222,6 +230,14 @@ class Settings(BaseSettings):
     DAILY_DIGEST_TIME: str = Field(
         default="09:00",
         description="Time to send daily digest (HH:MM format)"
+    )
+    
+    # ============================================================================
+    # Frontend Configuration
+    # ============================================================================
+    frontend_url: str = Field(
+        default="http://localhost:5173",
+        description="Frontend URL for CORS configuration"
     )
     
     # ============================================================================

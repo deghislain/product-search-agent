@@ -28,7 +28,7 @@ services:
       - key: EMAIL_FROM
         sync: false
       - key: FRONTEND_URL
-        value: https://product-search-frontend.onrender.com
+        value: https://product-search-agent-ff7s.onrender.com
     
   # Frontend Static Site
   - type: web
@@ -44,10 +44,10 @@ services:
     routes:
       - type: rewrite
         source: /api/*
-        destination: https://product-search-backend.onrender.com/api/*
+        destination: https://product-search-agent-api.onrender.com/api/*
       - type: rewrite
         source: /ws
-        destination: https://product-search-backend.onrender.com/ws
+        destination: https://product-search-agent-api.onrender.com/ws
     headers:
       - path: /*
         name: X-Frame-Options
