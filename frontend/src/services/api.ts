@@ -26,7 +26,7 @@ const apiClient = axios.create({
     headers: {
         'Content-Type': 'application/json',
     },
-    timeout: 30000, // 30 second timeout
+    timeout: 60000, // 30 second timeout
 });
 
 // ============================================================================

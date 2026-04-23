@@ -195,14 +195,17 @@ async def startup_event():
     logger.info(f"📚 API Documentation: http://localhost:8000/docs")
     logger.info(f"📖 Alternative Docs: http://localhost:8000/redoc")
     logger.info(f"💚 Health Check: http://localhost:8000/api/health")
-    logger.info("🚀 Product Search Agent API starting up...")
-    logger.info("📚 API Documentation: http://localhost:8000/docs")
-    logger.info("=" * 70 + "\n")
-
-  
-    logger.info("\n" + "=" * 70)
-    logger.info("🚀 Product Search Agent API Starting Up")
-    logger.info("=" * 70)
+    
+    # Initialize database tables
+    try:
+        from app.database import init_db
+        logger.info("🗄️  Initializing database...")
+        init_db()
+        logger.info("✅ Database initialized successfully")
+    except Exception as e:
+        logger.error(f"❌ Failed to initialize database: {str(e)}")
+        import traceback
+        traceback.print_exc()
     
     # Start the scheduler
     try:
