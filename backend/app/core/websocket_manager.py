@@ -22,7 +22,11 @@ class ConnectionManager:
     
     def disconnect(self, websocket: WebSocket):
         """Remove connection from active list"""
-        self.active_connections.remove(websocket)
+        try:
+            self.active_connections.remove(websocket)
+        except ValueError:
+            # Connection already removed or never added
+            logger.debug(f"Connection {id(websocket)} not in active connections list")
 
     async def send_personal_message(self, message: str, websocket: WebSocket):
         """Send message to specific client"""
@@ -35,16 +39,21 @@ class ConnectionManager:
         # Track failed connections
         disconnected = []
         
-        for connection in self.active_connections:
+        for connection in self.active_connections[:]:  # Create a copy to iterate safely
             try:
                 await connection.send_text(message_str)
+                logger.debug(f"Sent message to client {id(connection)}: {message.get('type', 'unknown')}")
             except Exception as e:
-                logger.error(f"Error sending to client: {e}")
+                logger.error(f"Error sending to client {id(connection)}: {e}")
                 disconnected.append(connection)
         
         # Remove failed connections
         for connection in disconnected:
-            self.disconnect(connection)
+            try:
+                self.disconnect(connection)
+                logger.info(f"Removed disconnected client {id(connection)}")
+            except Exception as e:
+                logger.error(f"Error removing client {id(connection)}: {e}")
 
 
 # Create single instance to be used throughout app
