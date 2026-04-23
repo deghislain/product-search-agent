@@ -81,13 +81,28 @@ if os.getenv("RENDER"):
     # Add Render frontend URL if provided
     frontend_service = os.getenv("FRONTEND_SERVICE_NAME", "product-search-frontend")
     origins.append(f"https://{frontend_service}.onrender.com")
+    
+    # Also allow all *.onrender.com domains in production (Render's internal routing)
+    # This is safe because Render controls the .onrender.com domain
+    origins.append("https://*.onrender.com")
 
 # Add any additional origins from settings
 if isinstance(settings.cors_origins, list):
     origins.extend(settings.cors_origins)
 
+# Add CORS_ORIGINS from environment if set
+cors_origins_env = os.getenv("CORS_ORIGINS")
+if cors_origins_env:
+    env_origins = [o.strip() for o in cors_origins_env.split(",") if o.strip()]
+    origins.extend(env_origins)
+
 # Remove duplicates while preserving order
 origins = list(dict.fromkeys(origins))
+
+# Log CORS origins for debugging
+import logging
+logger = logging.getLogger(__name__)
+logger.info(f"CORS Origins configured: {origins}")
 
 app.add_middleware(
     CORSMiddleware,
