@@ -66,7 +66,7 @@ def list_products(
     )
 
 
-@router.get("/matches", response_model=ProductListResponse)
+@router.get("/matches/", response_model=ProductListResponse)
 def list_matching_products(
     skip: int = 0,
     limit: int = 200,
