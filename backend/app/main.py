@@ -78,13 +78,15 @@ origins = [
 
 # Add Render-specific origins if deployed on Render
 if os.getenv("RENDER"):
-    # Add Render frontend URL if provided
-    frontend_service = os.getenv("FRONTEND_SERVICE_NAME", "product-search-frontend")
-    origins.append(f"https://{frontend_service}.onrender.com")
+    # Add the actual frontend URL from environment
+    frontend_url = os.getenv("FRONTEND_URL")
+    if frontend_url:
+        origins.append(frontend_url)
     
-    # Also allow all *.onrender.com domains in production (Render's internal routing)
-    # This is safe because Render controls the .onrender.com domain
-    origins.append("https://*.onrender.com")
+    # Add common Render frontend URLs
+    origins.extend([
+        "https://product-search-agent-ff7s.onrender.com",
+    ])
 
 # Add any additional origins from settings
 if isinstance(settings.cors_origins, list):
