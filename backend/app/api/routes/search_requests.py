@@ -25,8 +25,13 @@ from app.schemas import SearchRequestCreate
 from app.schemas import SearchRequestUpdate
 from app.core.orchestrator import SearchOrchestrator
 from app.database import SessionLocal
+from app.core.query_optimizer import QueryOptimizer
+from app.core.reasoning_engine import ReasoningEngine
 
+
+logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
+
 
 # Create router with prefix and tags
 router = APIRouter(
@@ -503,5 +508,101 @@ def resume_search_request(
     db.refresh(db_search_request)
     
     return db_search_request
+
+
+
+query_optimizer = QueryOptimizer()
+reasoning_engine = ReasoningEngine()
+@router.post("/{id}/optimize-query")
+async def optimize_search_query(
+    id: int,
+    db: Session = Depends(get_db)
+):
+    """
+    Let AI optimize the search query based on past results.
+    
+    Example:
+        POST /api/search-requests/1/optimize-query
+        
+        Returns:
+        {
+            "original_query": "car",
+            "optimized_query": "Toyota Camry 2015-2018 sedan reliable",
+            "reasoning": "Based on your clicks, you prefer Toyota sedans..."
+        }
+    """
+    # Get search request
+    search_request = db.query(SearchRequest).filter(
+        SearchRequest.id == id
+    ).first()
+    
+    if not search_request:
+        raise HTTPException(status_code=404, detail="Search request not found")
+    
+    # Get previous results
+    previous_results = db.query(Product).filter(
+        Product.search_request_id == id
+    ).all()
+    
+    # Get clicked products (you'll need to track this)
+    # For now, use products with high match scores as proxy
+    clicked_products = [p for p in previous_results if p.match_score >= 80]
+    ignored_products = [p for p in previous_results if p.match_score < 60]
+    
+    # Optimize query
+    optimized_query = await query_optimizer.optimize_query(
+        original_query=search_request.product_name,
+        budget=search_request.budget,
+        previous_results=previous_results,
+        clicked_products=clicked_products,
+        ignored_products=ignored_products
+    )
+    
+    return {
+        "original_query": search_request.product_name,
+        "optimized_query": optimized_query,
+        "reasoning": f"Based on {len(clicked_products)} products you liked"
+    }
+
+
+@router.get("/products/{id}/explanation")
+async def get_match_explanation(
+    id: int,
+    db: Session = Depends(get_db)
+):
+    """
+    Get AI explanation for why a product matched.
+    
+    Example:
+        GET /api/products/123/explanation
+        
+        Returns:
+        {
+            "product_id": 123,
+            "match_score": 87.5,
+            "explanation": "This product scored 87% because..."
+        }
+    """
+    # Get product
+    product = db.query(Product).filter(Product.id == id).first()
+    if not product:
+        raise HTTPException(status_code=404, detail="Product not found")
+    
+    # Get search request
+    search_request = db.query(SearchRequest).filter(
+        SearchRequest.id == product.search_request_id
+    ).first()
+    
+    # Generate explanation
+    explanation = await reasoning_engine.explain_match_score(
+        product=product,
+        search_request=search_request
+    )
+    
+    return {
+        "product_id": product.id,
+        "match_score": product.match_score,
+        "explanation": explanation
+    }
 
 # Made with Bob

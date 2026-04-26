@@ -24,6 +24,7 @@ dependencies = [
     "pytest-asyncio",
     "selenium-stealth",
     "apscheduler",
-    "websockets"
+    "websockets",
+    "groq"
 ]
 

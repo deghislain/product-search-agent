@@ -277,6 +277,26 @@ class Settings(BaseSettings):
     )
     
     # ============================================================================
+    # LLM Configuration (Groq API)
+    # ============================================================================
+    groq_api_key: str = Field(
+        default="",
+        description="Groq API key from console.groq.com"
+    )
+    llm_enabled: bool = Field(
+        default=True,
+        description="Enable LLM features"
+    )
+    llm_model: str = Field(
+        default="llama-3.3-70b-versatile",
+        description="Groq model to use"
+    )
+    llm_timeout: int = Field(
+        default=30,
+        description="LLM request timeout in seconds"
+    )
+    
+    # ============================================================================
     # Email Notification Settings (Optional)
     # ============================================================================
     enable_email_notifications: bool = Field(
