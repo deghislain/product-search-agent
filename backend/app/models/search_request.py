@@ -5,7 +5,7 @@ This model represents a user's search request with product criteria,
 budget constraints, and matching preferences.
 """
 
-from sqlalchemy import Column, String, Float, DateTime, Boolean, Text, Enum as SQLEnum, Index
+from sqlalchemy import Column, String, Float, DateTime, Boolean, Text, Enum as SQLEnum, Index, Integer, JSON
 from sqlalchemy.orm import relationship
 from datetime import datetime
 import uuid
@@ -159,6 +159,36 @@ class SearchRequest(Base):
         onupdate=datetime.utcnow,
         comment="When the search request was last updated"
     )
+    
+    # ========================================================================
+    # Query Optimization Fields (Agentic Features)
+    # ========================================================================
+    
+    query_version = Column(
+        Integer,
+        nullable=False,
+        default=0,
+        comment="Track query iterations for optimization"
+    )
+    
+    query_history = Column(
+        JSON,
+        nullable=True,
+        default=list,
+        comment="Store all query versions with timestamps and performance metrics"
+    )
+    
+    optimization_enabled = Column(
+        Boolean,
+        nullable=False,
+        default=True,
+        comment="Enable/disable automatic query optimization"
+    )
+    
+    # ========================================================================
+    # Platform Selection
+    # ========================================================================
+    
     search_craigslist = Column(
         Boolean,
         nullable=False,
@@ -360,6 +390,12 @@ class SearchRequest(Base):
             'location': self.location,
             'match_threshold': self.match_threshold,
             'status': self.status.value,
+            'query_version': self.query_version,
+            'query_history': self.query_history,
+            'optimization_enabled': self.optimization_enabled,
+            'search_craigslist': self.search_craigslist,
+            'search_ebay': self.search_ebay,
+            'search_facebook': self.search_facebook,
             'created_at': self.created_at.isoformat() if self.created_at else None,
             'updated_at': self.updated_at.isoformat() if self.updated_at else None,
         }

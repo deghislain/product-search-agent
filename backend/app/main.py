@@ -19,12 +19,14 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from datetime import datetime
 from app.api.routes import websocket
-from app.core.scheduler import SearchScheduler
+#from app.core.scheduler import SearchScheduler
+from app.core.enhanced_scheduler import EnhancedSearchScheduler
 from app.config import settings
 
 
 # Create global scheduler instance
-scheduler = SearchScheduler()
+#scheduler = SearchScheduler()
+scheduler = EnhancedSearchScheduler()
 
 from app.api.routes import scheduler as scheduler_routes
 

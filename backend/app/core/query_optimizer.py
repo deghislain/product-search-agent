@@ -6,7 +6,7 @@ After: AI suggests "Toyota Camry 2015-2018 sedan reliable under 100k miles"
 """
 import logging
 from typing import List, Dict
-from app.core.llm_client import get_ollama_client
+from app.core.llm_client import get_groq_client
 from app.models.product import Product
 
 
@@ -29,7 +29,7 @@ class QueryOptimizer:
     
     def __init__(self):
         """Initialize with Ollama client."""
-        self.llm = get_ollama_client()
+        self.llm = get_groq_client()
     
     async def optimize_query(
         self,

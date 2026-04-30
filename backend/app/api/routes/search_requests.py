@@ -511,61 +511,170 @@ def resume_search_request(
 
 
 
+# ============================================================================
+# Agentic Features - Query Optimization & Adaptive Scheduling
+# ============================================================================
+
 query_optimizer = QueryOptimizer()
 reasoning_engine = ReasoningEngine()
-@router.post("/{id}/optimize-query")
+
+from app.core.adaptive_scheduler import get_adaptive_scheduler
+adaptive_scheduler = get_adaptive_scheduler()
+
+@router.post("/{search_request_id}/optimize", response_model=dict)
 async def optimize_search_query(
-    id: int,
+    search_request_id: str,
     db: Session = Depends(get_db)
 ):
     """
-    Let AI optimize the search query based on past results.
+    Optimize the search query using AI based on past results and user feedback.
     
-    Example:
-        POST /api/search-requests/1/optimize-query
+    This endpoint uses the QueryOptimizer to analyze previous search results
+    and generate an improved query. The optimization history is tracked in
+    the database for learning and transparency.
+    
+    Args:
+        search_request_id: ID of the search request to optimize
+        db: Database session
         
-        Returns:
+    Returns:
+        dict: Optimization results including original query, optimized query,
+              reasoning, and updated query version
+              
+    Raises:
+        HTTPException: 404 if search request not found
+        HTTPException: 400 if optimization is disabled for this search
+        HTTPException: 400 if no previous results to analyze
+        
+    Example:
+        ```
+        POST /api/search-requests/123e4567-e89b-12d3-a456-426614174000/optimize
+        ```
+        
+    Response:
+        ```json
         {
-            "original_query": "car",
-            "optimized_query": "Toyota Camry 2015-2018 sedan reliable",
-            "reasoning": "Based on your clicks, you prefer Toyota sedans..."
+            "search_request_id": "123e4567-e89b-12d3-a456-426614174000",
+            "original_query": "Toyota Camry",
+            "optimized_query": "Toyota Camry 2015-2018 LE SE XLE under 100k miles",
+            "query_version": 1,
+            "reasoning": "Based on 15 high-scoring matches, added year range 2015-2018 and popular trim levels (LE, SE, XLE). Added mileage constraint based on budget.",
+            "optimization_metrics": {
+                "previous_results_count": 150,
+                "high_score_products": 15,
+                "avg_previous_score": 65.5,
+                "optimization_timestamp": "2026-04-26T15:55:00Z"
+            }
         }
+        ```
     """
+    from app.models import Product
+    from datetime import datetime
+    
     # Get search request
     search_request = db.query(SearchRequest).filter(
-        SearchRequest.id == id
+        SearchRequest.id == search_request_id
     ).first()
     
     if not search_request:
-        raise HTTPException(status_code=404, detail="Search request not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Search request with id {search_request_id} not found"
+        )
+    
+    # Check if optimization is enabled
+    if not search_request.optimization_enabled:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Query optimization is disabled for this search request"
+        )
     
     # Get previous results
     previous_results = db.query(Product).filter(
-        Product.search_request_id == id
+        Product.search_request_id == search_request_id
     ).all()
     
-    # Get clicked products (you'll need to track this)
-    # For now, use products with high match scores as proxy
+    if not previous_results:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No previous results to analyze. Run a search first."
+        )
+    
+    # Analyze products by match score
+    # High-scoring products indicate what the user wants
     clicked_products = [p for p in previous_results if p.match_score >= 80]
     ignored_products = [p for p in previous_results if p.match_score < 60]
     
-    # Optimize query
-    optimized_query = await query_optimizer.optimize_query(
+    logger.info(f"Optimizing query for search {search_request_id}: "
+                f"{len(previous_results)} results, "
+                f"{len(clicked_products)} high-score, "
+                f"{len(ignored_products)} low-score")
+    
+    # Store current query in history before optimization
+    current_history = search_request.query_history or []
+    avg_score = sum(p.match_score for p in previous_results) / len(previous_results)
+    
+    current_history.append({
+        "version": search_request.query_version,
+        "query": search_request.product_name,
+        "timestamp": datetime.utcnow().isoformat(),
+        "results_count": len(previous_results),
+        "high_score_count": len(clicked_products),
+        "avg_match_score": round(avg_score, 2)
+    })
+    
+    # Optimize query using AI
+    try:
+        optimized_query = await query_optimizer.optimize_query(
+            original_query=search_request.product_name,
+            budget=search_request.budget,
+            previous_results=previous_results,
+            clicked_products=clicked_products,
+            ignored_products=ignored_products
+        )
+    except Exception as e:
+        logger.error(f"Query optimization failed: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Query optimization failed: {str(e)}"
+        )
+    
+    # Generate reasoning explanation
+    reasoning = await reasoning_engine.explain_optimization(
         original_query=search_request.product_name,
-        budget=search_request.budget,
-        previous_results=previous_results,
+        optimized_query=optimized_query,
         clicked_products=clicked_products,
         ignored_products=ignored_products
     )
     
+    # Update search request with optimized query
+    search_request.product_name = optimized_query
+    search_request.query_version += 1
+    search_request.query_history = current_history
+    search_request.updated_at = datetime.utcnow()
+    
+    db.commit()
+    db.refresh(search_request)
+    
+    logger.info(f"Query optimized: v{search_request.query_version - 1} -> v{search_request.query_version}")
+    
     return {
-        "original_query": search_request.product_name,
+        "search_request_id": search_request_id,
+        "original_query": current_history[-1]["query"],
         "optimized_query": optimized_query,
-        "reasoning": f"Based on {len(clicked_products)} products you liked"
+        "query_version": search_request.query_version,
+        "reasoning": reasoning,
+        "optimization_metrics": {
+            "previous_results_count": len(previous_results),
+            "high_score_products": len(clicked_products),
+            "low_score_products": len(ignored_products),
+            "avg_previous_score": round(avg_score, 2),
+            "optimization_timestamp": datetime.utcnow().isoformat()
+        }
     }
 
 
-@router.get("/products/{id}/explanation")
+@router.get("/{search_request_id}/products/{product_id}/explanation")
 async def get_match_explanation(
     id: int,
     db: Session = Depends(get_db)
@@ -604,5 +713,186 @@ async def get_match_explanation(
         "match_score": product.match_score,
         "explanation": explanation
     }
+
+
+# ============================================================================
+# Agentic Features - Adaptive Scheduling
+# ============================================================================
+
+@router.get("/{search_request_id}/schedule-recommendation", response_model=dict)
+async def get_schedule_recommendation(
+    search_request_id: str,
+    db: Session = Depends(get_db)
+):
+    """
+    Get AI-powered scheduling recommendation for a search request.
+    
+    This endpoint analyzes platform-specific listing patterns and provides
+    intelligent recommendations on when to search for optimal results.
+    
+    Args:
+        search_request_id: ID of the search request
+        db: Database session
+        
+    Returns:
+        dict: Scheduling recommendation with next search time and reasoning
+        
+    Raises:
+        HTTPException: 404 if search request not found
+        
+    Example:
+        ```
+        GET /api/search-requests/123e4567-e89b-12d3-a456-426614174000/schedule-recommendation
+        ```
+        
+    Response:
+        ```json
+        {
+            "search_request_id": "123e4567-e89b-12d3-a456-426614174000",
+            "platforms": ["craigslist", "ebay"],
+            "next_search_time": "2026-04-26T20:00:00Z",
+            "hours_until_next": 1.5,
+            "recommendation": "Based on learned patterns, Craigslist has peak activity on weekends 8-10 AM with an average of 12 new listings per hour. eBay auctions typically end Sunday evenings 6-9 PM. I recommend searching at 8 PM tonight to catch both platforms' peak times.",
+            "patterns_analyzed": true
+        }
+        ```
+    """
+    # Get search request
+    search_request = db.query(SearchRequest).filter(
+        SearchRequest.id == search_request_id
+    ).first()
+    
+    if not search_request:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Search request with id {search_request_id} not found"
+        )
+    
+    # Get recommendation from adaptive scheduler
+    try:
+        recommendation = await adaptive_scheduler.get_schedule_recommendation(
+            search_request,
+            db
+        )
+        return recommendation
+    except Exception as e:
+        logger.error(f"Failed to get schedule recommendation: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to generate schedule recommendation: {str(e)}"
+        )
+
+
+@router.post("/analyze-patterns", response_model=dict)
+async def analyze_listing_patterns(
+    platform: Optional[str] = None,
+    db: Session = Depends(get_db)
+):
+    """
+    Analyze listing patterns for platforms.
+    
+    This endpoint triggers pattern analysis for one or all platforms.
+    Should be run periodically (e.g., daily) to keep patterns up-to-date.
+    
+    Args:
+        platform: Specific platform to analyze (optional, analyzes all if not provided)
+        db: Database session
+        
+    Returns:
+        dict: Analysis results
+        
+    Example:
+        ```
+        POST /api/search-requests/analyze-patterns?platform=craigslist
+        ```
+        
+    Response:
+        ```json
+        {
+            "status": "success",
+            "platforms_analyzed": ["craigslist"],
+            "patterns": {
+                "craigslist": {
+                    "peak_hours": [8, 9, 10, 18, 19, 20],
+                    "peak_days": "Sat, Sun",
+                    "avg_listings_per_hour": 12.5,
+                    "last_updated": "2026-04-26T18:00:00Z"
+                }
+            }
+        }
+        ```
+    """
+    try:
+        if platform:
+            # Analyze specific platform
+            logger.info(f"Analyzing patterns for {platform}")
+            await adaptive_scheduler.analyze_listing_patterns(platform, db)
+            platforms_analyzed = [platform]
+        else:
+            # Analyze all platforms
+            logger.info("Analyzing patterns for all platforms")
+            await adaptive_scheduler.analyze_all_patterns(db)
+            platforms_analyzed = ["craigslist", "ebay", "facebook"]
+        
+        # Get pattern summary
+        patterns = adaptive_scheduler.get_pattern_summary()
+        
+        return {
+            "status": "success",
+            "platforms_analyzed": platforms_analyzed,
+            "patterns": patterns,
+            "message": f"Successfully analyzed patterns for {', '.join(platforms_analyzed)}"
+        }
+    except Exception as e:
+        logger.error(f"Pattern analysis failed: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Pattern analysis failed: {str(e)}"
+        )
+
+
+@router.get("/patterns/summary", response_model=dict)
+async def get_patterns_summary():
+    """
+    Get summary of all learned listing patterns.
+    
+    Returns:
+        dict: Summary of patterns for all platforms
+        
+    Example:
+        ```
+        GET /api/search-requests/patterns/summary
+        ```
+        
+    Response:
+        ```json
+        {
+            "craigslist": {
+                "peak_hours": [8, 9, 10, 18, 19, 20],
+                "peak_days": "Sat, Sun",
+                "avg_listings_per_hour": 12.5,
+                "last_updated": "2026-04-26T18:00:00Z",
+                "total_hourly_data_points": 1250
+            },
+            "ebay": {
+                "peak_hours": [18, 19, 20, 21],
+                "peak_days": "Sun",
+                "avg_listings_per_hour": 8.3,
+                "last_updated": "2026-04-26T18:00:00Z",
+                "total_hourly_data_points": 890
+            }
+        }
+        ```
+    """
+    patterns = adaptive_scheduler.get_pattern_summary()
+    
+    if not patterns:
+        return {
+            "message": "No patterns learned yet. Run pattern analysis first.",
+            "patterns": {}
+        }
+    
+    return patterns
+
 
 # Made with Bob

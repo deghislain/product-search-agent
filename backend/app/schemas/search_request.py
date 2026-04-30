@@ -5,7 +5,7 @@ These schemas are used for API request validation and response serialization.
 """
 
 from pydantic import BaseModel, Field, field_validator
-from typing import Optional
+from typing import Optional, List, Dict, Any
 from datetime import datetime
 from enum import Enum
 
@@ -59,6 +59,10 @@ class SearchRequestBase(BaseModel):
         default=False,
         description="Enable the search on Facebook Marketplace"
     )
+    optimization_enabled: bool = Field(
+        default=True,
+        description="Enable/disable automatic query optimization"
+    )
 
 
 class SearchRequestCreate(SearchRequestBase):
@@ -111,6 +115,10 @@ class SearchRequestUpdate(BaseModel):
         None,
         description="Enable the search on Facebook Marketplace"
     )
+    optimization_enabled: Optional[bool] = Field(
+        None,
+        description="Enable/disable automatic query optimization"
+    )
 
 class SearchRequestResponse(SearchRequestBase):
     """Schema for search request API responses."""
@@ -118,6 +126,11 @@ class SearchRequestResponse(SearchRequestBase):
     status: SearchStatus = Field(..., description="Current status of the search request")
     created_at: datetime = Field(..., description="When the search request was created")
     updated_at: datetime = Field(..., description="When the search request was last updated")
+    query_version: int = Field(default=0, description="Current query version number")
+    query_history: Optional[List[Dict[str, Any]]] = Field(
+        default=None,
+        description="History of query optimizations"
+    )
 
     class Config:
         from_attributes = True  # Allows creation from ORM models
