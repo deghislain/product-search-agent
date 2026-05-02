@@ -54,6 +54,27 @@ from app.schemas.email_preference import (
     EmailPreferenceResponse,
 )
 
+# User Interaction schemas
+from app.schemas.user_interaction import (
+    UserInteractionBase,
+    UserInteractionCreate,
+    UserInteractionResponse,
+    UserInteractionListResponse,
+    UserInteractionStats,
+    UserInteractionFilterParams,
+)
+
+# User Preference schemas
+from app.schemas.user_preference import (
+    UserPreferenceBase,
+    UserPreferenceCreate,
+    UserPreferenceUpdate,
+    UserPreferenceResponse,
+    UserPreferenceListResponse,
+    UserPreferenceWeights,
+    UserPreferenceFilterParams,
+)
+
 __all__ = [
     # Search Request
     "SearchStatus",
@@ -89,6 +110,21 @@ __all__ = [
     "EmailPreferenceCreate",
     "EmailPreferenceUpdate",
     "EmailPreferenceResponse",
+    # User Interaction
+    "UserInteractionBase",
+    "UserInteractionCreate",
+    "UserInteractionResponse",
+    "UserInteractionListResponse",
+    "UserInteractionStats",
+    "UserInteractionFilterParams",
+    # User Preference
+    "UserPreferenceBase",
+    "UserPreferenceCreate",
+    "UserPreferenceUpdate",
+    "UserPreferenceResponse",
+    "UserPreferenceListResponse",
+    "UserPreferenceWeights",
+    "UserPreferenceFilterParams",
 ]
 
 # Made with Bob

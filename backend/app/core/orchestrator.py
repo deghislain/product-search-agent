@@ -17,6 +17,7 @@ from app.scrapers.craigslist import CraigslistScraper
 from app.scrapers.ebay_factory import get_ebay_scraper, EbayScraperType
 from app.scrapers.facebook_marketplace import FacebookMarketplaceScraper
 from app.core.matching import ProductMatcher
+from app.core.personalized_scoring import PersonalizedScoreCalculator
 from app.services.email_service import EmailService
 from app.config import settings
 
@@ -48,6 +49,7 @@ class SearchOrchestrator:
         """Initialize orchestrator with database session."""
         self.db = db
         self.matching_engine = ProductMatcher(min_score_threshold = 85.0)
+        self.personalized_scorer = PersonalizedScoreCalculator(db=db)
         self.email_service = EmailService(settings)
         
         # Initialize scrapers
@@ -57,12 +59,17 @@ class SearchOrchestrator:
             'facebook': FacebookMarketplaceScraper()
         }
     
-    async def execute_search(self, search_request: SearchRequest) -> SearchExecution:
+    async def execute_search(
+        self,
+        search_request: SearchRequest,
+        user_id: Optional[str] = None
+    ) -> SearchExecution:
         """
         Execute a complete search across all enabled platforms.
         
         Args:
             search_request: The search request to execute
+            user_id: Optional user ID for personalized scoring
             
         Returns:
             SearchExecution: Record of the search execution
@@ -70,11 +77,13 @@ class SearchOrchestrator:
         Workflow:
         1. Create execution record
         2. Search each platform
-        3. Match products against criteria
+        3. Match products against criteria (with personalization if user_id provided)
         4. Save results to database
         5. Update execution status
         """
         logger.info(f"Starting search execution for request {search_request.id}")
+        if user_id:
+            logger.info(f"Using personalized scoring for user: {user_id}")
         
         # Step 1: Create execution record
         execution = SearchExecution(
@@ -101,10 +110,11 @@ class SearchOrchestrator:
             # Step 3.5: Convert dictionaries to Product objects (with image fetching)
             all_products = await self._convert_dicts_to_products(all_products_dicts)
             
-            # Step 4: Match products against criteria
-            matched_products = self._match_products(
+            # Step 4: Match products against criteria (with personalization)
+            matched_products = await self._match_products(
                 search_request,
-                all_products
+                all_products,
+                user_id
             )
             
             # Step 5: Save results to database and send notifications
@@ -470,29 +480,46 @@ class SearchOrchestrator:
         logger.info(f"Converted {len(products)} product dictionaries to Product objects")
         return products
 
-    def _match_products(
+    async def _match_products(
         self,
         search_request: SearchRequest,
-        products: List[Product]
+        products: List[Product],
+        user_id: Optional[str] = None
     ) -> List[Product]:
         """
-        Match products against search criteria using matching engine.
+        Match products against search criteria using personalized scoring.
         
         Args:
             search_request: The search request with criteria
             products: List of products to match
+            user_id: Optional user ID for personalized scoring
             
         Returns:
-            List of products that match criteria (with match scores)
+            List of products that match criteria (with personalized match scores)
         """
         logger.info(f"Matching {len(products)} products against criteria")
         
-        # Use matching engine to score products
-        #search = SearchRequest(product_name="Different", budget=50)
-        matched_products: List[Product] = self.matching_engine.find_matches(
-            products=products,
-            search_request=search_request
-        )
+        if user_id:
+            # Use personalized scoring
+            logger.info(f"Using personalized scoring for user {user_id}")
+            scored_products = await self.personalized_scorer.score_and_filter_products(
+                products=products,
+                search_request=search_request,
+                user_id=user_id
+            )
+            # Convert tuples back to list of products with scores set
+            matched_products = []
+            for product, score in scored_products:
+                product.match_score = score
+                product.is_match = True
+                matched_products.append(product)
+        else:
+            # Use standard matching engine
+            logger.info("Using standard matching (no personalization)")
+            matched_products: List[Product] = self.matching_engine.find_matches(
+                products=products,
+                search_request=search_request
+            )
         
         logger.info(
             f"Found {len(matched_products)} products above match threshold"

@@ -1,4 +1,5 @@
 import type { Product } from '../services/searchRequestService';
+import { useProductViewTracking, useProductInteractions } from '../hooks/useProductTracking';
 
 interface ProductCardProps {
   product: Product;
@@ -6,10 +7,22 @@ interface ProductCardProps {
 }
 
 export default function ProductCard({ product, onViewDetails }: ProductCardProps) {
+  // Track view duration automatically
+  useProductViewTracking(product.id);
+  
+  // Get tracking functions
+  const { trackClick } = useProductInteractions();
+  
   const handleClick = () => {
     if (onViewDetails) {
       onViewDetails(product);
     }
+  };
+  
+  const handleViewListing = async (_e: React.MouseEvent<HTMLAnchorElement>) => {
+    // Track the click before opening the link
+    await trackClick(product.id);
+    // Let the default link behavior continue
   };
 
   return (
@@ -79,6 +92,7 @@ export default function ProductCard({ product, onViewDetails }: ProductCardProps
             href={product.url}
             target="_blank"
             rel="noopener noreferrer"
+            onClick={handleViewListing}
             className="flex-1 bg-blue-500 hover:bg-blue-700 text-white text-center py-2 px-4 rounded font-medium transition-colors"
           >
             View Listing

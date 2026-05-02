@@ -258,12 +258,13 @@ async def shutdown_event():
 # ============================================================================
 
 # Import routers
-from app.api.routes import search_requests, products, email_preferences
+from app.api.routes import search_requests, products, email_preferences, user_interactions
 
 # Include routers in the application
 app.include_router(search_requests.router)
 app.include_router(products.router)
 app.include_router(email_preferences.router)
+app.include_router(user_interactions.router)
 
 
 # ============================================================================

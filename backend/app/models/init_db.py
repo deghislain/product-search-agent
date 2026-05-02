@@ -19,6 +19,8 @@ from app.models.search_request import SearchRequest
 from app.models.search_execution import SearchExecution
 from app.models.product import Product
 from app.models.notification import Notification
+from app.models.user_interaction import UserInteraction
+from app.models.user_preference import UserPreference
 import logging
 logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
@@ -223,7 +225,7 @@ def verify_db(verbose: bool = True) -> bool:
         inspector = inspect(engine)
         tables = inspector.get_table_names()
         
-        expected_tables = ['search_requests', 'search_executions', 'products', 'notifications']
+        expected_tables = ['search_requests', 'search_executions', 'products', 'notifications', 'user_interactions', 'user_preferences']
         missing_tables = [t for t in expected_tables if t not in tables]
         
         if missing_tables:
@@ -290,6 +292,8 @@ def get_db_stats(verbose: bool = True) -> dict:
             'search_executions': db.query(SearchExecution).count(),
             'products': db.query(Product).count(),
             'notifications': db.query(Notification).count(),
+            'user_interactions': db.query(UserInteraction).count(),
+            'user_preferences': db.query(UserPreference).count(),
         }
         
         if verbose:
@@ -301,6 +305,8 @@ def get_db_stats(verbose: bool = True) -> dict:
             logger.debug(f"   Search Executions: {stats['search_executions']}")
             logger.debug(f"   Products: {stats['products']}")
             logger.debug(f"   Notifications: {stats['notifications']}")
+            logger.debug(f"   User Interactions: {stats['user_interactions']}")
+            logger.debug(f"   User Preferences: {stats['user_preferences']}")
             logger.debug(f"\n   Total Records: {sum(stats.values())}")
             logger.debug("\n" + "="*70)
         

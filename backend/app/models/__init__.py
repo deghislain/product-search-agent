@@ -161,6 +161,8 @@ from app.models.search_execution import SearchExecution
 from app.models.product import Product
 from app.models.notification import Notification
 from app.models.email_preference import EmailPreference
+from app.models.user_interaction import UserInteraction
+from app.models.user_preference import UserPreference   
 # ============================================================================
 # Public API
 # ============================================================================
@@ -178,6 +180,8 @@ __all__ = [
     "Product",
     "Notification",
     "EmailPreference", 
+    "UserInteraction",
+    "UserPreference",
     # Utility functions
     "get_all_models",
     "get_all_enums",
@@ -194,7 +198,7 @@ def get_all_models() -> list:
     Get a list of all model classes.
     
     Returns:
-        list: List of model classes [SearchRequest, SearchExecution, Product, Notification]
+        list: List of model classes [SearchRequest, SearchExecution, Product, Notification,UserInteraction,UserPreference]
     
     Example:
         ```python
@@ -206,7 +210,7 @@ def get_all_models() -> list:
             print(f"Table: {model.__tablename__}")
         ```
     """
-    return [SearchRequest, SearchExecution, Product, Notification, EmailPreference]
+    return [SearchRequest, SearchExecution, Product, Notification, EmailPreference, UserInteraction, UserPreference]
 
 
 def get_all_enums() -> dict:

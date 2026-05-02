@@ -14,7 +14,7 @@ export interface SearchRequest {
 }
 
 export interface Product {
-     id: number;
+     id: string;  // UUID string
      title: string;
      price: number;
      url: string;
