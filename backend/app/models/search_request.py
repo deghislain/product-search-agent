@@ -212,6 +212,7 @@ class SearchRequest(Base):
     back_populates="search_request",
     cascade="all, delete-orphan"  # Delete preferences when search is deleted
 )
+    email_address = Column(String, nullable=True, index=True)
     # ========================================================================
     # Indexes for Performance
     # ========================================================================

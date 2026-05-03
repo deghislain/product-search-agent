@@ -22,6 +22,7 @@ from app.api.routes import websocket
 #from app.core.scheduler import SearchScheduler
 from app.core.enhanced_scheduler import EnhancedSearchScheduler
 from app.config import settings
+from app.api.routes import global_email_preferences
 
 
 # Create global scheduler instance
@@ -29,6 +30,8 @@ from app.config import settings
 scheduler = EnhancedSearchScheduler()
 
 from app.api.routes import scheduler as scheduler_routes
+
+
 
 
 
@@ -66,6 +69,7 @@ app = FastAPI(
 )
 # Include scheduler routes
 app.include_router(scheduler_routes.router)
+app.include_router(global_email_preferences.router, prefix="/api")
 
 # Configure CORS (Cross-Origin Resource Sharing)
 # This allows the frontend to communicate with the API

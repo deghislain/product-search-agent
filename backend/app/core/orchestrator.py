@@ -20,6 +20,7 @@ from app.core.matching import ProductMatcher
 from app.core.personalized_scoring import PersonalizedScoreCalculator
 from app.services.email_service import EmailService
 from app.config import settings
+from app.models.global_email_preference import GlobalEmailPreference
 
 from app.core.websocket_manager import manager
 from app.schemas.notification import (
@@ -694,24 +695,65 @@ class SearchOrchestrator:
             logger.error(f"Sent error notification: {error_message}")
         except Exception as e:
             logger.error(f"Failed to send error notification: {str(e)}")
+        
+    async def _send_search_started_email(
+        self,
+        search_request: SearchRequest
+        ):
+        """Send email notification when search starts"""
+        try:
+            # Determine which email preferences to use
+            email_address = None
+            notify_enabled = False
+            preference_source = None
+            
+            # Priority 1: Per-search email preferences
+            email_pref = self.db.query(EmailPreference).filter(
+                EmailPreference.search_request_id == search_request.id
+            ).first()
+            
+            if email_pref:
+                email_address = email_pref.email_address
+                notify_enabled = email_pref.notify_on_start
+                preference_source = "per-search"
+                logger.debug(f"Using per-search preferences for {email_address}")
+            
+            # Priority 2: Global email preferences (if search has email_address)
+            elif search_request.email_address:
+                global_pref = self.db.query(GlobalEmailPreference).filter(
+                    GlobalEmailPreference.email_address == search_request.email_address
+                ).first()
+                
+                if global_pref:
+                    email_address = global_pref.email_address
+                    notify_enabled = global_pref.notify_on_start
+                    preference_source = "global"
+                    logger.debug(f"Using global preferences for {email_address}")
+            
+            # Check if notifications are enabled
+            if not email_address or not notify_enabled:
+                logger.debug(f"Search started email notifications disabled for search request {search_request.id}")
+                return
+            
+            # Send email
+            await self.email_service.send_search_started(
+                email=email_address,
+                search_request=search_request
+            )
+            
+            logger.info(f"Sent search started email to {email_address} ({preference_source} preferences)")
+            
+        except Exception as e:
+            logger.error(f"Failed to send search started email: {str(e)}")
+            logger.error(f"Failed to send match email: {str(e)}")
     
     async def _send_match_email(
         self,
         search_request_id: str,
         product: Product
     ):
-        """Send email notification for new match"""
+        """Send email notification for a new match"""
         try:
-            # Get email preferences for this search request
-            email_pref = self.db.query(EmailPreference).filter(
-                EmailPreference.search_request_id == search_request_id
-            ).first()
-            
-            # Check if email notifications are enabled
-            if not email_pref or not email_pref.notify_on_match:
-                logger.debug(f"Email notifications disabled for search request {search_request_id}")
-                return
-            
             # Get the search request
             search_request = self.db.query(SearchRequest).filter(
                 SearchRequest.id == search_request_id
@@ -721,41 +763,47 @@ class SearchOrchestrator:
                 logger.warning(f"Search request {search_request_id} not found")
                 return
             
+            # Determine which email preferences to use
+            email_address = None
+            notify_enabled = False
+            preference_source = None
+            
+            # Priority 1: Per-search email preferences
+            email_pref = self.db.query(EmailPreference).filter(
+                EmailPreference.search_request_id == search_request_id
+            ).first()
+            
+            if email_pref:
+                email_address = email_pref.email_address
+                notify_enabled = email_pref.notify_on_match
+                preference_source = "per-search"
+                logger.debug(f"Using per-search preferences for {email_address}")
+            
+            # Priority 2: Global email preferences (only if search has email_address)
+            elif search_request.email_address:
+                global_pref = self.db.query(GlobalEmailPreference).filter(
+                    GlobalEmailPreference.email_address == search_request.email_address
+                ).first()
+                
+                if global_pref:
+                    email_address = global_pref.email_address
+                    notify_enabled = global_pref.notify_on_match
+                    preference_source = "global"
+                    logger.debug(f"Using global preferences for {email_address}")
+            
+            # Check if notifications are enabled
+            if not email_address or not notify_enabled:
+                logger.debug(f"Email notifications disabled for search request {search_request_id}")
+                return
+            
             # Send email
             await self.email_service.send_match_notification(
-                email=email_pref.email_address,
+                email=email_address,
                 product=product,
                 search_request=search_request
             )
             
-            logger.info(f"Sent match email notification to {email_pref.email_address}")
+            logger.info(f"Sent match email to {email_address} ({preference_source} preferences)")
             
         except Exception as e:
-            logger.error(f"Failed to send match email: {str(e)}")
-    
-    async def _send_search_started_email(
-        self,
-        search_request: SearchRequest
-    ):
-        """Send email notification when search starts"""
-        try:
-            # Get email preferences for this search request
-            email_pref = self.db.query(EmailPreference).filter(
-                EmailPreference.search_request_id == search_request.id
-            ).first()
-            
-            # Check if email notifications are enabled
-            if not email_pref or not email_pref.notify_on_start:
-                logger.debug(f"Search started email notifications disabled for search request {search_request.id}")
-                return
-            
-            # Send email
-            await self.email_service.send_search_started(
-                email=email_pref.email_address,
-                search_request=search_request
-            )
-            
-            logger.info(f"Sent search started email notification to {email_pref.email_address}")
-            
-        except Exception as e:
-            logger.error(f"Failed to send search started email: {str(e)}")
+           logger.error(f"Failed to send match email: {str(e)}")

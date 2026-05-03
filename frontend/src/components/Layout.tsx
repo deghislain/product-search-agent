@@ -26,31 +26,31 @@ export default function Layout({ children }: LayoutProps) {
       <nav className="bg-white border-b">
         <div className="max-w-7xl mx-auto px-4">
           <div className="flex space-x-8">
-            <Link 
-              to="/" 
-              className={`py-4 px-2 border-b-2 ${
-                isActive('/') 
-                  ? 'border-blue-500 text-blue-600' 
+            <Link
+              to="/"
+              className={`py-4 px-4 border-b-2 ${
+                isActive('/')
+                  ? 'border-blue-500 text-blue-600'
                   : 'border-transparent hover:border-blue-500'
               }`}
             >
               Dashboard
             </Link>
-            <Link 
-              to="/matches" 
-              className={`py-4 px-2 border-b-2 ${
-                isActive('/matches') 
-                  ? 'border-blue-500 text-blue-600' 
+            <Link
+              to="/matches"
+              className={`py-4 px-4 border-b-2 ${
+                isActive('/matches')
+                  ? 'border-blue-500 text-blue-600'
                   : 'border-transparent hover:border-blue-500'
               }`}
             >
               Matches
             </Link>
-            <Link 
-              to="/settings" 
-              className={`py-4 px-2 border-b-2 ${
-                isActive('/settings') 
-                  ? 'border-blue-500 text-blue-600' 
+            <Link
+              to="/settings"
+              className={`py-4 px-4 border-b-2 ${
+                isActive('/settings')
+                  ? 'border-blue-500 text-blue-600'
                   : 'border-transparent hover:border-blue-500'
               }`}
             >

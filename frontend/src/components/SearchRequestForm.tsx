@@ -14,6 +14,7 @@ interface SearchRequestData {
   platforms: string[];
   location?: string;
   match_threshold?: number;
+  email_address?: string;
 }
 
 export default function SearchRequestForm({ 
@@ -37,6 +38,7 @@ export default function SearchRequestForm({
       platforms: initialData?.platforms || ([] as string[]),
       location: initialData?.location || '',
       matchThreshold: initialData?.match_threshold?.toString() || '70',
+      emailAddress: initialData?.email_address || '',
     },
     {
       productName: (value) => {
@@ -67,6 +69,12 @@ export default function SearchRequestForm({
         }
         return null;
       },
+      emailAddress: (value) => {
+        if (!value) return null; // Email is optional
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailRegex.test(value)) return 'Invalid email address';
+        return null;
+      },
     }
   );
 
@@ -83,6 +91,7 @@ export default function SearchRequestForm({
         platforms: values.platforms,
         location: values.location.trim() || undefined,
         match_threshold: values.matchThreshold ? parseFloat(values.matchThreshold) : 70,
+        email_address: values.emailAddress.trim() || undefined,
       };
 
       await onSubmit(formData);
@@ -206,6 +215,30 @@ export default function SearchRequestForm({
           className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
           placeholder="e.g., San Francisco, CA"
         />
+      </div>
+
+      {/* Email Address Input */}
+      <div className="mb-4">
+        <label className="block text-gray-700 text-sm font-bold mb-2" htmlFor="emailAddress">
+          Email Address (Optional)
+        </label>
+        <input
+          id="emailAddress"
+          type="email"
+          value={values.emailAddress}
+          onChange={(e) => handleChange('emailAddress', e.target.value)}
+          onBlur={() => handleBlur('emailAddress')}
+          className={`shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline ${
+            touched.emailAddress && errors.emailAddress ? 'border-red-500' : ''
+          }`}
+          placeholder="your@email.com"
+        />
+        {touched.emailAddress && errors.emailAddress && (
+          <p className="text-red-500 text-xs italic mt-1">{errors.emailAddress}</p>
+        )}
+        <p className="text-gray-600 text-xs mt-1">
+          Receive notifications for this search. Uses your global email preferences if set.
+        </p>
       </div>
 
       {/* Match Threshold Input */}

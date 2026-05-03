@@ -25,6 +25,7 @@ dependencies = [
     "selenium-stealth",
     "apscheduler",
     "websockets",
-    "groq"
+    "groq",
+    "email_validator"
 ]
 

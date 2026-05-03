@@ -123,4 +123,77 @@ export const updateEmailPreferences = async (preferences: EmailPreferences): Pro
   await apiClient.post('/api/email-preferences/', preferences);
 };
 
+
+export interface GlobalEmailPreferences {
+  id: number;
+  email_address: string;
+  notify_on_match: boolean;
+  notify_on_start: boolean;
+  include_in_digest: boolean;
+  digest_time: string;
+  digest_timezone: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface GlobalEmailPreferencesCreate {
+  email_address: string;
+  notify_on_match?: boolean;
+  notify_on_start?: boolean;
+  include_in_digest?: boolean;
+  digest_time?: string;
+  digest_timezone?: string;
+}
+
+export interface GlobalEmailPreferencesUpdate {
+  notify_on_match?: boolean;
+  notify_on_start?: boolean;
+  include_in_digest?: boolean;
+  digest_time?: string;
+  digest_timezone?: string;
+}
+
+export async function createOrUpdateGlobalEmailPreferences(
+  data: GlobalEmailPreferencesCreate
+): Promise<GlobalEmailPreferences> {
+  const response = await fetch(`${API_BASE_URL}/api/global-email-preferences/`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+  if (!response.ok) throw new Error('Failed to save preferences');
+  return response.json();
+}
+
+export async function getGlobalEmailPreferences(
+  email: string
+): Promise<GlobalEmailPreferences | null> {
+  const response = await fetch(
+    `${API_BASE_URL}/api/global-email-preferences/${encodeURIComponent(email)}`
+  );
+  if (!response.ok) {
+    if (response.status === 404) return null;
+    throw new Error('Failed to fetch preferences');
+  }
+  return response.json();
+}
+
+export async function updateGlobalEmailPreferences(
+  email: string,
+  data: GlobalEmailPreferencesUpdate
+): Promise<GlobalEmailPreferences> {
+  const response = await fetch(
+    `${API_BASE_URL}/api/global-email-preferences/${encodeURIComponent(email)}`,
+    {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    }
+  );
+  if (!response.ok) throw new Error('Failed to update preferences');
+  return response.json();
+}
+
 export default apiClient;
+
+

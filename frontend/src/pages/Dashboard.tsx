@@ -2,7 +2,8 @@ import { useState, useEffect } from 'react';
 import SearchRequestList from '../components/SearchRequestList';
 import SearchRequestForm from '../components/SearchRequestForm';
 import { createSearchRequest, getSearchRequests } from '../services/searchRequestService';
-import { getProducts } from '../services/productService';
+import { getMatchingProducts } from '../services/productService';
+
 
 export default function Dashboard() {
   const [showForm, setShowForm] = useState(false);
@@ -24,7 +25,9 @@ export default function Dashboard() {
       const activeSearches = searches.filter(s => s.status === 'active').length;
 
       // Fetch products
-      const products = await getProducts();
+      const products = await getMatchingProducts();
+
+     
       const totalMatches = products.length;
 
       // Calculate new today (products created today)

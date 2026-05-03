@@ -163,6 +163,7 @@ from app.models.notification import Notification
 from app.models.email_preference import EmailPreference
 from app.models.user_interaction import UserInteraction
 from app.models.user_preference import UserPreference   
+from app.models.global_email_preference import GlobalEmailPreference
 # ============================================================================
 # Public API
 # ============================================================================
@@ -182,6 +183,7 @@ __all__ = [
     "EmailPreference", 
     "UserInteraction",
     "UserPreference",
+    "GlobalEmailPreference",
     # Utility functions
     "get_all_models",
     "get_all_enums",

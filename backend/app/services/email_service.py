@@ -75,7 +75,7 @@ class EmailService:
             async with SMTP(
                 hostname=self.config.SMTP_HOST,
                 port=self.config.SMTP_PORT,
-                use_tls=True  # Use STARTTLS for port 587
+                start_tls=True  # Use STARTTLS for port 587
             ) as smtp:
                 # Login to SMTP server
                 logger.debug(f"Logging in as: {self.config.SMTP_USERNAME}")
@@ -113,15 +113,29 @@ class EmailService:
             template = self.template_env.get_template("emails/match_notification.html")
             
             # Prepare template context
+            # Format created_at - handle both datetime objects and strings
+            created_at_str = "Recently"
+            if product.created_at:
+                try:
+                    if isinstance(product.created_at, str):
+                        created_at_str = product.created_at
+                    elif hasattr(product.created_at, 'strftime'):
+                        created_at_str = product.created_at.strftime("%B %d, %Y at %I:%M %p")
+                    else:
+                        created_at_str = str(product.created_at)
+                except Exception as e:
+                    logger.warning(f"Could not format product.created_at: {e}")
+                    created_at_str = "Recently"
+            
             context = {
-                "search_query": search_request.query,
+                "search_query": search_request.product_name,
                 "product": {
                     "title": product.title,
                     "price": f"{product.price:.2f}" if product.price else "N/A",
                     "platform": product.platform.capitalize(),
                     "match_score": f"{product.match_score:.1f}" if product.match_score else "N/A",
                     "url": product.url,
-                    "created_at": product.created_at
+                    "created_at": created_at_str
                 }
             }
             
@@ -175,7 +189,7 @@ class EmailService:
                 
                 if product and search_request:
                     formatted_matches.append({
-                        "search_query": search_request.query,
+                        "search_query": search_request.product_name,
                         "product": {
                             "title": product.title,
                             "price": f"{product.price:.2f}" if product.price else "N/A",
@@ -186,8 +200,10 @@ class EmailService:
                     })
             
             # Prepare template context
+            # Format date for template
+            date_str = datetime.now().strftime('%B %d, %Y')
             context = {
-                "date": datetime.now(),
+                "date": date_str,
                 "matches": formatted_matches
             }
             
@@ -234,19 +250,38 @@ class EmailService:
             # Load and render template
             template = self.template_env.get_template("emails/search_started.html")
             
-            # Parse platforms from comma-separated string to list
+            # Build platforms list from boolean fields
             platforms = []
-            if search_request.platforms:
-                platforms = [p.strip().capitalize() for p in search_request.platforms.split(',')]
+            if search_request.search_craigslist:
+                platforms.append("Craigslist")
+            if search_request.search_ebay:
+                platforms.append("eBay")
+            if search_request.search_facebook:
+                platforms.append("Facebook Marketplace")
             
             # Prepare template context
+            # Format created_at - handle both datetime objects and strings
+            created_at_str = "Just now"
+            if search_request.created_at:
+                try:
+                    if isinstance(search_request.created_at, str):
+                        created_at_str = search_request.created_at
+                    elif hasattr(search_request.created_at, 'strftime'):
+                        created_at_str = search_request.created_at.strftime("%Y-%m-%d %H:%M:%S")
+                    else:
+                        # Fallback: convert to string
+                        created_at_str = str(search_request.created_at)
+                except Exception as e:
+                    logger.warning(f"Could not format created_at: {e}, using 'Just now'")
+                    created_at_str = "Just now"
+            
             context = {
                 "search_request": {
                     "product_name": search_request.product_name,
                     "budget": f"{search_request.budget:.2f}" if search_request.budget else "Not specified",
                     "platforms": platforms if platforms else ["All platforms"],
                     "search_interval": search_request.search_interval if hasattr(search_request, 'search_interval') else 2,
-                    "created_at": search_request.created_at.strftime("%Y-%m-%d %H:%M:%S") if search_request.created_at else "Just now"
+                    "created_at": created_at_str
                 }
             }
             

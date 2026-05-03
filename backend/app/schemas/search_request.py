@@ -63,6 +63,11 @@ class SearchRequestBase(BaseModel):
         default=True,
         description="Enable/disable automatic query optimization"
     )
+    email_address: Optional[str] = Field(
+    None,
+    description="Email address of the user creating this search"
+)
+
 
 
 class SearchRequestCreate(SearchRequestBase):

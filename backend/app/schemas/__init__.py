@@ -75,6 +75,12 @@ from app.schemas.user_preference import (
     UserPreferenceFilterParams,
 )
 
+from app.schemas.global_email_preference import (
+    GlobalEmailPreferenceCreate,
+    GlobalEmailPreferenceUpdate,
+    GlobalEmailPreferenceResponse
+)
+
 __all__ = [
     # Search Request
     "SearchStatus",
@@ -125,6 +131,10 @@ __all__ = [
     "UserPreferenceListResponse",
     "UserPreferenceWeights",
     "UserPreferenceFilterParams",
+    # Global Email Preference"
+    "GlobalEmailPreferenceCreate",
+    "GlobalEmailPreferenceUpdate",
+    "GlobalEmailPreferenceResponse",
 ]
 
 # Made with Bob

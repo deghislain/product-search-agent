@@ -325,8 +325,10 @@ async def create_search_request(
         match_threshold=search_request.match_threshold,
         search_craigslist=search_craigslist,
         search_ebay=search_ebay,
-        search_facebook=search_facebook
+        search_facebook=search_facebook,
+        email_address=search_request.email_address  # ADD THIS LINE
     )
+
     
     # Add to database
     db.add(db_search_request)
@@ -894,5 +896,20 @@ async def get_patterns_summary():
     
     return patterns
 
+@router.post("/", response_model=SearchRequestResponse, status_code=201)
+def create_search_request(
+    search_request: SearchRequestCreate,
+    email: Optional[str] = None,  # Add this parameter
+    db: Session = Depends(get_db)
+):
+        """Create a new search request"""
+        db_search_request = SearchRequest(
+            **search_request.model_dump(),
+            email_address=email  # Add this
+        )
+        db.add(db_search_request)
+        db.commit()
+        db.refresh(db_search_request)
+        return db_search_request
 
 # Made with Bob

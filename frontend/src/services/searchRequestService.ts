@@ -8,6 +8,7 @@ export interface SearchRequest {
   platforms: string[];
   location?: string;
   match_threshold?: number;
+  email_address?: string;
   status: 'active' | 'paused' | 'completed' | 'cancelled';
   created_at?: string;
   updated_at?: string;
@@ -85,6 +86,7 @@ export const createSearchRequest = async (data: Omit<SearchRequest, 'id' | 'stat
     search_craigslist: data.platforms.includes('craigslist'),
     search_ebay: data.platforms.includes('ebay'),
     search_facebook: data.platforms.includes('facebook'),
+    email_address: data.email_address || null,
   };
   
   const response = await apiClient.post('/api/search-requests/', backendData);
