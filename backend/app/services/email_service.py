@@ -44,6 +44,7 @@ class EmailService:
         Raises:
             Exception: If email sending fails
         """
+        logger.info(f"Attempting to send email to {to_email}")
         # Check if email notifications are enabled
         if not self.config.ENABLE_EMAIL_NOTIFICATIONS:
             logger.warning("Email notifications are disabled. Skipping email send.")
@@ -108,6 +109,7 @@ class EmailService:
         Raises:
             Exception: If email sending fails
         """
+        logger.info(f"Sending match notification to {email} for product: {product.title}")
         try:
             # Load and render template
             template = self.template_env.get_template("emails/match_notification.html")
@@ -175,6 +177,7 @@ class EmailService:
         Raises:
             Exception: If email sending fails
         """
+        logger.info(f"Preparing daily digest email for {email}")
         try:
             from datetime import datetime
             
@@ -246,6 +249,7 @@ class EmailService:
         Raises:
             Exception: If email sending fails
         """
+        logger.info(f"Sending search started email to {email}")
         try:
             # Load and render template
             template = self.template_env.get_template("emails/search_started.html")
