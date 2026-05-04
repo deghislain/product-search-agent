@@ -1,1 +1,1 @@
-web: python -m app.models.init_db init --no-confirm --quiet && uvicorn app.main:app --host 0.0.0.0 --port $PORT
+web: python -m app.models.init_db init --no-confirm --quiet && uvicorn app.main:app --host 0.0.0.0 --port $PORT --ws-ping-interval 20 --ws-ping-timeout 20 --timeout-keep-alive 65

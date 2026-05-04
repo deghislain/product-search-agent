@@ -60,8 +60,11 @@ async def websocket_endpoint(websocket: WebSocket):
                         "timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat()
                     }))
                     logger.debug(f"Sent heartbeat to client {client_id}")
+                except RuntimeError as e:
+                    logger.warning(f"WebSocket closed during heartbeat for client {client_id}: {e}")
+                    break
                 except Exception as e:
-                    logger.error(f"Failed to send heartbeat to client {client_id}: {e}")
+                    logger.error(f"Failed to send heartbeat to client {client_id}: {type(e).__name__}: {e}")
                     break
     
     except WebSocketDisconnect:

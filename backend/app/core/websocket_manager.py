@@ -34,7 +34,13 @@ class ConnectionManager:
 
     async def broadcast(self, message: dict):
         """Send message to all connected clients with error handling"""
+        # Skip if no active connections
+        if not self.active_connections:
+            logger.debug("No active WebSocket connections to broadcast to")
+            return
+        
         message_str = json.dumps(message)
+        logger.debug(f"Broadcasting to {len(self.active_connections)} clients: {message.get('type', 'unknown')}")
         
         # Track failed connections
         disconnected = []
@@ -43,8 +49,17 @@ class ConnectionManager:
             try:
                 await connection.send_text(message_str)
                 logger.debug(f"Sent message to client {id(connection)}: {message.get('type', 'unknown')}")
+            except RuntimeError as e:
+                # WebSocket is closed or in invalid state
+                logger.warning(f"WebSocket closed for client {id(connection)}: {type(e).__name__}: {e}")
+                disconnected.append(connection)
+            except ConnectionResetError as e:
+                # Connection was reset by peer
+                logger.warning(f"Connection reset for client {id(connection)}: {e}")
+                disconnected.append(connection)
             except Exception as e:
-                logger.error(f"Error sending to client {id(connection)}: {e}")
+                # Catch all other exceptions with full details
+                logger.error(f"Error sending to client {id(connection)}: {type(e).__name__}: {e}", exc_info=True)
                 disconnected.append(connection)
         
         # Remove failed connections
@@ -53,7 +68,7 @@ class ConnectionManager:
                 self.disconnect(connection)
                 logger.info(f"Removed disconnected client {id(connection)}")
             except Exception as e:
-                logger.error(f"Error removing client {id(connection)}: {e}")
+                logger.error(f"Error removing client {id(connection)}: {type(e).__name__}: {e}")
 
 
 # Create single instance to be used throughout app
