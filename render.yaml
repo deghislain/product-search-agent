@@ -27,6 +27,8 @@ services:
         sync: false
       - key: EMAIL_FROM
         sync: false
+      - key: ENABLE_EMAIL_NOTIFICATIONS
+        value: true
       - key: FRONTEND_URL
         value: https://product-search-agent-ff7s.onrender.com
       - key: CORS_ORIGINS
