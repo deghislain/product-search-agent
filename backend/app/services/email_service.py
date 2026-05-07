@@ -1,4 +1,4 @@
-from aiosmtplib import SMTP
+from aiosmtplib import SMTP, SMTPException
 from jinja2 import Environment, FileSystemLoader
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
@@ -7,10 +7,11 @@ from app.models.search_request import SearchRequest
 from app.models.notification import Notification
 from app.models.email_preference import EmailPreference
 from app.config import Settings
-from typing import List, Dict
+from typing import List, Dict, Optional
 import logging
 from datetime import datetime
 from sqlalchemy.orm import Session
+import asyncio
             
 
 # Configure logger
@@ -27,14 +28,70 @@ class EmailService:
             loader=FileSystemLoader("app/templates")
         )
     
-    async def send_email(
+    async def send_email_with_retry(
+        self,
+        to_email: str,
+        subject: str,
+        html_content: str,
+        max_retries: Optional[int] = None,
+        initial_delay: Optional[float] = None
+    ):
+        """
+        Send email with exponential backoff retry logic.
+        
+        Args:
+            to_email: Recipient email address
+            subject: Email subject line
+            html_content: HTML content of the email
+            max_retries: Maximum number of retry attempts
+            initial_delay: Initial delay between retries in seconds
+            
+        Raises:
+            Exception: If email sending fails after all retries
+        """
+        # Use config values if not provided
+        if max_retries is None:
+            max_retries = self.config.EMAIL_MAX_RETRIES
+        if initial_delay is None:
+            initial_delay = self.config.EMAIL_RETRY_DELAY
+        
+        last_exception = None
+        
+        for attempt in range(max_retries):
+            try:
+                await self._send_email_internal(to_email, subject, html_content)
+                logger.info(f"Email sent successfully to {to_email} on attempt {attempt + 1}")
+                return
+            except (SMTPException, asyncio.TimeoutError, ConnectionError, OSError) as e:
+                last_exception = e
+                if attempt < max_retries - 1:
+                    delay = initial_delay * (2 ** attempt)  # Exponential backoff
+                    logger.warning(
+                        f"Failed to send email to {to_email} (attempt {attempt + 1}/{max_retries}): {str(e)}. "
+                        f"Retrying in {delay} seconds..."
+                    )
+                    await asyncio.sleep(delay)
+                else:
+                    logger.error(
+                        f"Failed to send email to {to_email} after {max_retries} attempts: {str(e)}",
+                        exc_info=True
+                    )
+            except Exception as e:
+                # For non-retryable exceptions, fail immediately
+                logger.error(f"Non-retryable error sending email to {to_email}: {str(e)}", exc_info=True)
+                raise
+        
+        # If we get here, all retries failed
+        raise Exception(f"Failed to send email after {max_retries} attempts: {str(last_exception)}")
+    
+    async def _send_email_internal(
         self,
         to_email: str,
         subject: str,
         html_content: str
     ):
         """
-        Core method to send email via SMTP.
+        Internal method to send email via SMTP (without retry logic).
         
         Args:
             to_email: Recipient email address
@@ -45,6 +102,7 @@ class EmailService:
             Exception: If email sending fails
         """
         logger.info(f"Attempting to send email to {to_email}")
+        
         # Check if email notifications are enabled
         if not self.config.ENABLE_EMAIL_NOTIFICATIONS:
             logger.warning("Email notifications are disabled. Skipping email send.")
@@ -59,38 +117,63 @@ class EmailService:
             logger.error("EMAIL_FROM not configured. Cannot send email.")
             raise ValueError("EMAIL_FROM not configured")
         
+        # Create MIME message
+        message = MIMEMultipart("alternative")
+        message["Subject"] = subject
+        message["From"] = f"{self.config.EMAIL_FROM_NAME} <{self.config.EMAIL_FROM}>"
+        message["To"] = to_email
+        
+        # Attach HTML content
+        html_part = MIMEText(html_content, "html")
+        message.attach(html_part)
+        
+        # Connect to SMTP server and send email
+        logger.info(f"Connecting to SMTP server: {self.config.SMTP_HOST}:{self.config.SMTP_PORT}")
+        
+        # Use asyncio.wait_for to add an overall timeout
         try:
-            # Create MIME message
-            message = MIMEMultipart("alternative")
-            message["Subject"] = subject
-            message["From"] = f"{self.config.EMAIL_FROM_NAME} <{self.config.EMAIL_FROM}>"
-            message["To"] = to_email
-            
-            # Attach HTML content
-            html_part = MIMEText(html_content, "html")
-            message.attach(html_part)
-            
-            # Connect to SMTP server and send email
-            logger.info(f"Connecting to SMTP server: {self.config.SMTP_HOST}:{self.config.SMTP_PORT}")
-            
-            async with SMTP(
-                hostname=self.config.SMTP_HOST,
-                port=self.config.SMTP_PORT,
-                start_tls=True  # Use STARTTLS for port 587
-            ) as smtp:
-                # Login to SMTP server
-                logger.debug(f"Logging in as: {self.config.SMTP_USERNAME}")
-                await smtp.login(self.config.SMTP_USERNAME, self.config.SMTP_PASSWORD)
-                
-                # Send email
-                logger.info(f"Sending email to: {to_email}")
-                await smtp.send_message(message)
-                
-                logger.info(f"Email sent successfully to: {to_email}")
-                
+            async with asyncio.timeout(self.config.EMAIL_TIMEOUT):
+                async with SMTP(
+                    hostname=self.config.SMTP_HOST,
+                    port=self.config.SMTP_PORT,
+                    start_tls=True,  # Use STARTTLS for port 587
+                    timeout=60,  # Connection timeout
+                    use_tls=False  # Don't use TLS initially, we'll use STARTTLS
+                ) as smtp:
+                    # Login to SMTP server
+                    logger.debug(f"Logging in as: {self.config.SMTP_USERNAME}")
+                    await smtp.login(self.config.SMTP_USERNAME, self.config.SMTP_PASSWORD)
+                    
+                    # Send email
+                    logger.info(f"Sending email to: {to_email}")
+                    await smtp.send_message(message)
+                    
+                    logger.info(f"Email sent successfully to: {to_email}")
+        except asyncio.TimeoutError:
+            logger.error(f"Timeout while sending email to {to_email}")
+            raise
         except Exception as e:
-            logger.error(f"Failed to send email to {to_email}: {str(e)}", exc_info=True)
-            raise Exception(f"Failed to send email: {str(e)}")
+            logger.error(f"Error sending email to {to_email}: {str(e)}", exc_info=True)
+            raise
+    
+    async def send_email(
+        self,
+        to_email: str,
+        subject: str,
+        html_content: str
+    ):
+        """
+        Core method to send email via SMTP with retry logic.
+        
+        Args:
+            to_email: Recipient email address
+            subject: Email subject line
+            html_content: HTML content of the email
+            
+        Raises:
+            Exception: If email sending fails after retries
+        """
+        await self.send_email_with_retry(to_email, subject, html_content)
     
     async def send_match_notification(
         self,

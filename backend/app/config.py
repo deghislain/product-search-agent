@@ -231,6 +231,24 @@ class Settings(BaseSettings):
         default="09:00",
         description="Time to send daily digest (HH:MM format)"
     )
+    EMAIL_MAX_RETRIES: int = Field(
+        default=3,
+        description="Maximum number of retry attempts for email sending",
+        ge=1,
+        le=10
+    )
+    EMAIL_RETRY_DELAY: float = Field(
+        default=2.0,
+        description="Initial delay between email retry attempts in seconds",
+        ge=0.5,
+        le=30.0
+    )
+    EMAIL_TIMEOUT: int = Field(
+        default=90,
+        description="Overall timeout for email operations in seconds",
+        ge=30,
+        le=300
+    )
     
     # ============================================================================
     # Frontend Configuration
