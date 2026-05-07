@@ -300,7 +300,7 @@ class Settings(BaseSettings):
     # Email Notification Settings (Optional)
     # ============================================================================
     enable_email_notifications: bool = Field(
-        default=False,
+        default=True,
         description="Enable email notifications"
     )
     email_smtp_host: str = Field(
