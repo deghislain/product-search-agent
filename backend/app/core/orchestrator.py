@@ -790,6 +790,7 @@ class SearchOrchestrator:
                     notify_enabled = global_pref.notify_on_match
                     preference_source = "global"
                     logger.debug(f"Using global preferences for {email_address}")
+                    logger.debug(f"notify_enabled {notify_enabled}")
             
             # Check if notifications are enabled
             if not email_address or not notify_enabled:
