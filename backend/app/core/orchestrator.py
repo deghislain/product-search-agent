@@ -18,7 +18,7 @@ from app.scrapers.ebay_factory import get_ebay_scraper, EbayScraperType
 from app.scrapers.facebook_marketplace import FacebookMarketplaceScraper
 from app.core.matching import ProductMatcher
 from app.core.personalized_scoring import PersonalizedScoreCalculator
-from app.services.email_service import EmailService
+from app.services.email_service import get_email_service
 from app.config import settings
 from app.models.global_email_preference import GlobalEmailPreference
 
@@ -51,7 +51,7 @@ class SearchOrchestrator:
         self.db = db
         self.matching_engine = ProductMatcher(min_score_threshold = 85.0)
         self.personalized_scorer = PersonalizedScoreCalculator(db=db)
-        self.email_service = EmailService(settings)
+        self.email_service = get_email_service(settings)
         
         # Initialize scrapers
         self.scrapers = {

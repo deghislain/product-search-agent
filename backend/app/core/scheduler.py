@@ -17,7 +17,7 @@ from typing import Optional
 from app.database import SessionLocal
 from app.models import SearchRequest, SearchStatus
 from app.core.orchestrator import SearchOrchestrator
-from app.services.email_service import EmailService
+from app.services.email_service import get_email_service
 from app.config import settings
 
 # Setup logging
@@ -48,7 +48,7 @@ class SearchScheduler:
         # Create an async scheduler (works with FastAPI)
         self.scheduler = AsyncIOScheduler()
         self._is_running = False
-        self.email_service = EmailService(settings)
+        self.email_service = get_email_service(settings)
         logger.info("SearchScheduler initialized")
     
     def start(self):

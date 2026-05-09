@@ -88,7 +88,7 @@ class EmailServiceHTTP:
         Returns:
             bool: True if successful, False otherwise
         """
-        logger.info(f"EmailService: Attempting to send email to {to_email} via SendGrid")
+        logger.info(f"EmailServiceHTTP: Attempting to send email to {to_email} via SendGrid")
         if not self.config.SENDGRID_API_KEY:
             logger.error("SendGrid API key not configured")
             return False

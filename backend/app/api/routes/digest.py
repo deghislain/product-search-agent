@@ -9,7 +9,7 @@ from fastapi import APIRouter, Depends, BackgroundTasks
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.services.email_service import EmailService
+from app.services.email_service import get_email_service
 from app.config import settings
 
 logger = logging.getLogger(__name__)
@@ -37,7 +37,7 @@ async def send_digest_now(
     Returns:
         dict: Status message
     """
-    email_service = EmailService(settings)
+    email_service = get_email_service(settings)
     
     # Run in background to not block the response
     background_tasks.add_task(
@@ -52,7 +52,7 @@ async def send_digest_now(
     }
 
 
-async def send_digest_task(email_service: EmailService, db: Session):
+async def send_digest_task(email_service, db: Session):
     """Background task to send digest"""
     try:
         # Prepare digest data
@@ -88,7 +88,7 @@ async def preview_digest(db: Session = Depends(get_db)):
     Returns:
         dict: Preview of digest data
     """
-    email_service = EmailService(settings)
+    email_service = get_email_service(settings)
     digest_data = await email_service.prepare_daily_digest_data(db)
     
     # Format for preview
