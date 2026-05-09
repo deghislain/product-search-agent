@@ -88,6 +88,7 @@ class EmailServiceHTTP:
         Returns:
             bool: True if successful, False otherwise
         """
+        logger.info(f"EmailService: Attempting to send email to {to_email} via SendGrid")
         if not self.config.SENDGRID_API_KEY:
             logger.error("SendGrid API key not configured")
             return False
@@ -300,7 +301,7 @@ class EmailServiceHTTP:
         Returns:
             bool: True if successful, False otherwise
         """
-        logger.info(f"Attempting to send email to {to_email} via {provider}")
+        logger.info(f"EmailServiceHTTP: Attempting to send email to {to_email} via {provider}")
         
         if provider == "sendgrid":
             return await self._send_via_sendgrid(to_email, subject, html_content)

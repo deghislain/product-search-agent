@@ -136,7 +136,7 @@ class EmailService:
         Raises:
             Exception: If email sending fails
         """
-        logger.info(f"Attempting to send email to {to_email}")
+        logger.info(f"EmailService: Attempting to send email to {to_email}")
         
         # Check if email notifications are enabled
         if not self.config.ENABLE_EMAIL_NOTIFICATIONS:
