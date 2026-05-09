@@ -1,18 +1,19 @@
-# Product Search Agent - Agentic System for Automated Product Discovery
+# Product Search Agent - AI-Powered Agentic System for Automated Product Discovery
 
-An intelligent, autonomous system that continuously monitors multiple online marketplaces to find products matching your criteria. Built with Python, featuring real-time web dashboard and email notifications.
+An intelligent, autonomous AI agent that continuously monitors multiple online marketplaces to find products matching your criteria. Features adaptive learning, intelligent query optimization, and personalized recommendations. Built with Python, FastAPI, and LLM integration.
 
 ---
 
 ## 🎯 What It Does
 
-Given a product name, description, and budget, this system:
+Given a product name, description, and budget, this AI agent:
 
-1. **Searches automatically** every 2 hours across multiple platforms
-2. **Matches intelligently** using NLP and fuzzy text matching
-3. **Notifies instantly** via web dashboard and email
-4. **Runs continuously** until you find what you need or stop it
-5. **Costs nothing** - uses only free, open-source tools
+1. **Searches intelligently** with adaptive scheduling based on listing patterns
+2. **Learns your preferences** from your interactions and feedback
+3. **Optimizes queries** automatically using LLM-powered refinement
+4. **Matches smartly** using NLP, fuzzy matching, and personalized scoring
+5. **Notifies instantly** via web dashboard and email
+6. **Adapts continuously** - gets better at finding what you want over time
 
 ### Example
 
@@ -44,18 +45,20 @@ Budget: $6,000
 
 ## ✨ Key Features
 
-### 🤖 Autonomous Operation
-- Scheduled searches every 2 hours (configurable)
-- Automatic retry on failures
-- Graceful error handling
-- Persistent across restarts
+### 🤖 Agentic AI Capabilities (Phase 1 Complete ✅)
+- **Intelligent Query Refinement**: LLM-powered query optimization based on search results
+- **Adaptive Scheduling**: Learns optimal search times for each platform
+- **Preference Learning**: Tracks interactions to personalize results
+- **Autonomous Decision Making**: Agent decides when and how to search
+- **Continuous Improvement**: Gets smarter with every search
 
 ### 🎯 Intelligent Matching
-- Fuzzy text matching for product names
-- NLP-based description analysis
-- Configurable match thresholds (60-90%)
-- Budget filtering
-- Duplicate detection
+- **Personalized Scoring**: Adapts to your preferences over time
+- **Fuzzy text matching** for product names
+- **NLP-based description analysis** with spaCy
+- **Dynamic thresholds**: Automatically adjusts based on your feedback
+- **Budget filtering** with price sensitivity learning
+- **Duplicate detection** across platforms
 
 ### 🔔 Multi-Channel Notifications
 - **Web Dashboard**: Real-time updates via WebSocket
@@ -161,12 +164,13 @@ npm run dev
 
 ### Backend
 - **FastAPI**: High-performance async web framework
-- **APScheduler**: Reliable job scheduling
+- **Groq API**: LLM integration for intelligent query optimization
+- **APScheduler**: Adaptive job scheduling with pattern learning
 - **BeautifulSoup4**: HTML parsing for static sites
 - **Selenium**: JavaScript rendering for dynamic sites
-- **SQLite**: Lightweight database
+- **SQLite/PostgreSQL**: Database with preference tracking
 - **RapidFuzz**: Fast fuzzy string matching
-- **spaCy**: Natural language processing
+- **spaCy**: Natural language processing for semantic analysis
 
 ### Frontend
 - **React**: Component-based UI
@@ -438,22 +442,33 @@ See [QUICK_START_GUIDE.md](QUICK_START_GUIDE.md#troubleshooting) for more soluti
 - [x] Improved matching with NLP
 - [x] WebSocket notifications
 - [x] Email notifications
-
-### Phase 3: Advanced Features (In Progress)
-- [ ] User authentication
-- [ ] Multiple users support
-- [ ] Advanced filtering options
-- [ ] Search analytics dashboard
-- [ ] Mobile app
 - [x] Kijiji.ca support (Canada) 🍁
 - [x] Extensible scraper architecture
+
+### Phase 3: Agentic AI Features ✅ (Phase 1 Complete)
+- [x] **Intelligent Query Refinement**: LLM-powered query optimization
+- [x] **Adaptive Search Scheduling**: Pattern-based timing optimization
+- [x] **User Preference Learning**: Interaction tracking and personalization
+- [x] **Personalized Scoring**: Dynamic match scoring based on preferences
+- [x] **Query History Tracking**: Version control for search queries
+- [ ] Multi-Agent Collaboration (Phase 2)
+- [ ] Reasoning and Explanation Engine (Phase 2)
+- [ ] Goal-Oriented Planning (Phase 2)
+
+### Phase 4: Advanced AI Features (In Progress)
+- [ ] Reinforcement Learning for search optimization
+- [ ] Natural Language Interface for search creation
+- [ ] Predictive Analytics for price trends
+- [ ] User authentication
+- [ ] Multiple users support
+- [ ] Search analytics dashboard
+- [ ] Mobile app
 - [ ] More platforms (OfferUp, Letgo, Autotrader, etc.)
 - [ ] Price history tracking
-- [ ] Saved searches
 - [ ] Browser extension
 
-### Phase 4: Enterprise (Future)
-- [ ] PostgreSQL support
+### Phase 5: Enterprise (Future)
+- [ ] PostgreSQL support (production-ready)
 - [ ] Redis caching
 - [ ] Horizontal scaling
 - [ ] API rate limiting per user
@@ -519,17 +534,54 @@ Built with amazing open-source tools:
 
 ## 📄 Summary
 
-This system provides a complete, production-ready solution for automated product searching:
+This system provides a complete, AI-powered agentic solution for automated product searching:
 
-✅ **Free**: No API keys or paid services  
-✅ **Automated**: Searches every 2 hours  
-✅ **Intelligent**: NLP-based matching  
-✅ **Real-time**: Instant notifications  
-✅ **Multi-channel**: Web + Email  
-✅ **Scalable**: Easy to extend  
-✅ **Well-documented**: Comprehensive guides  
+✅ **AI-Powered**: LLM-based query optimization and learning
+✅ **Adaptive**: Learns from your behavior and preferences
+✅ **Intelligent**: Personalized scoring and matching
+✅ **Autonomous**: Makes decisions about when and how to search
+✅ **Real-time**: Instant notifications via WebSocket
+✅ **Multi-channel**: Web dashboard + Email
+✅ **Scalable**: Easy to extend with new platforms
+✅ **Well-documented**: Comprehensive guides and architecture docs
 
 **Ready to start? See [QUICK_START_GUIDE.md](QUICK_START_GUIDE.md)!**
+
+---
+
+## 🤖 Agentic AI Features (NEW!)
+
+### What Makes This an "Agent"?
+
+Unlike traditional automated systems, this is a true AI agent that:
+
+1. **Learns Autonomously**: Tracks your interactions to understand preferences
+2. **Makes Decisions**: Decides optimal search times based on platform patterns
+3. **Adapts Continuously**: Refines queries using LLM analysis of results
+4. **Personalizes Results**: Adjusts scoring based on what you actually click
+5. **Explains Reasoning**: Can explain why it made certain decisions (Phase 2)
+
+### Phase 1 Agentic Features ✅
+
+#### 1. Intelligent Query Refinement
+- Uses Groq LLM API to analyze search results
+- Automatically improves queries based on what you click/ignore
+- Tracks query evolution with version history
+- Example: "Toyota Camry" → "Toyota Camry 2015-2018 LE SE under 100k miles"
+
+#### 2. Adaptive Search Scheduling
+- Learns when new listings appear on each platform
+- Adjusts search timing for maximum efficiency
+- Reduces unnecessary searches during low-activity periods
+- Increases frequency during peak listing times
+
+#### 3. User Preference Learning
+- Tracks every interaction (views, clicks, ignores)
+- Builds preference profile automatically
+- Adjusts match scoring based on learned preferences
+- Dynamically tunes match thresholds
+
+**See [docs/AGENTIC_UPGRADE_PLAN.md](docs/AGENTIC_UPGRADE_PLAN.md) for full details on the AI agent architecture.**
 
 ---
 
