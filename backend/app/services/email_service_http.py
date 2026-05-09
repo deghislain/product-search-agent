@@ -1,67 +1,187 @@
-from aiosmtplib import SMTP, SMTPException
+"""
+HTTP-based Email Service using SendGrid and Mailgun APIs.
+
+This service provides an alternative to SMTP for sending emails,
+which works better on cloud platforms like Render.com.
+
+Supports:
+- SendGrid API
+- Mailgun API
+- Automatic fallback between providers
+"""
+
+import httpx
+import logging
+from typing import Optional, Dict, List
 from jinja2 import Environment, FileSystemLoader
-from email.mime.text import MIMEText
-from email.mime.multipart import MIMEMultipart
+from app.config import Settings
 from app.models.product import Product
 from app.models.search_request import SearchRequest
-from app.models.notification import Notification
-from app.models.email_preference import EmailPreference
-from app.config import Settings
-from typing import List, Dict, Optional
-import logging
-from datetime import datetime
-from sqlalchemy.orm import Session
 import asyncio
-            
+from datetime import datetime
 
-# Configure logger
 logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
 
-def get_email_service(config: Settings):
+class EmailServiceHTTP:
     """
-    Factory function to get the appropriate email service based on configuration.
+    HTTP-based email service supporting SendGrid and Mailgun.
     
-    Priority:
-    1. If EMAIL_PROVIDER is 'http' or SendGrid/Mailgun keys are set, use HTTP service
-    2. If EMAIL_PROVIDER is 'smtp' or SMTP credentials are set, use SMTP service
-    3. Auto-detect based on available credentials
-    
-    Args:
-        config: Application settings
-        
-    Returns:
-        EmailService or EmailServiceHTTP instance
+    Features:
+    - Multiple provider support (SendGrid, Mailgun)
+    - Automatic fallback between providers
+    - Retry logic with exponential backoff
+    - Template rendering with Jinja2
     """
-    # Check if HTTP providers are configured
-    has_sendgrid = bool(config.SENDGRID_API_KEY)
-    has_mailgun = bool(config.MAILGUN_API_KEY and config.MAILGUN_DOMAIN)
-    has_smtp = bool(config.SMTP_USERNAME and config.SMTP_PASSWORD)
     
-    # Determine which service to use
-    if config.EMAIL_PROVIDER == "http" or has_sendgrid or has_mailgun:
-        logger.info("Using HTTP-based email service (SendGrid/Mailgun)")
-        from app.services.email_service_http import EmailServiceHTTP
-        return EmailServiceHTTP(config)
-    elif config.EMAIL_PROVIDER == "smtp" or has_smtp:
-        logger.info("Using SMTP-based email service")
-        return EmailService(config)
-    else:
-        logger.warning("No email provider configured. Email notifications will be disabled.")
-        # Return HTTP service as default (it will handle the error gracefully)
-        from app.services.email_service_http import EmailServiceHTTP
-        return EmailServiceHTTP(config)
-
-
-
-class EmailService:
     def __init__(self, config: Settings):
         """Initialize email service with configuration"""
         self.config = config
         self.template_env = Environment(
             loader=FileSystemLoader("app/templates")
         )
+        
+        # Determine which provider to use
+        self.primary_provider = self._determine_primary_provider()
+        self.fallback_provider = self._determine_fallback_provider()
+        
+        logger.info(f"Email service initialized with primary provider: {self.primary_provider}")
+        if self.fallback_provider:
+            logger.info(f"Fallback provider available: {self.fallback_provider}")
+    
+    def _determine_primary_provider(self) -> Optional[str]:
+        """Determine which email provider to use as primary"""
+        if self.config.SENDGRID_API_KEY:
+            return "sendgrid"
+        elif self.config.MAILGUN_API_KEY and self.config.MAILGUN_DOMAIN:
+            return "mailgun"
+        elif self.config.SMTP_USERNAME and self.config.SMTP_PASSWORD:
+            logger.warning("Only SMTP credentials available. Consider using SendGrid or Mailgun for better reliability.")
+            return None
+        return None
+    
+    def _determine_fallback_provider(self) -> Optional[str]:
+        """Determine fallback provider if primary fails"""
+        if self.primary_provider == "sendgrid":
+            if self.config.MAILGUN_API_KEY and self.config.MAILGUN_DOMAIN:
+                return "mailgun"
+        elif self.primary_provider == "mailgun":
+            if self.config.SENDGRID_API_KEY:
+                return "sendgrid"
+        return None
+    
+    async def _send_via_sendgrid(
+        self,
+        to_email: str,
+        subject: str,
+        html_content: str
+    ) -> bool:
+        """
+        Send email via SendGrid API.
+        
+        Args:
+            to_email: Recipient email address
+            subject: Email subject line
+            html_content: HTML content of the email
+            
+        Returns:
+            bool: True if successful, False otherwise
+        """
+        if not self.config.SENDGRID_API_KEY:
+            logger.error("SendGrid API key not configured")
+            return False
+        
+        url = "https://api.sendgrid.com/v3/mail/send"
+        headers = {
+            "Authorization": f"Bearer {self.config.SENDGRID_API_KEY}",
+            "Content-Type": "application/json"
+        }
+        
+        payload = {
+            "personalizations": [
+                {
+                    "to": [{"email": to_email}],
+                    "subject": subject
+                }
+            ],
+            "from": {
+                "email": self.config.EMAIL_FROM,
+                "name": self.config.EMAIL_FROM_NAME
+            },
+            "content": [
+                {
+                    "type": "text/html",
+                    "value": html_content
+                }
+            ]
+        }
+        
+        try:
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                response = await client.post(url, json=payload, headers=headers)
+                
+                if response.status_code == 202:
+                    logger.info(f"Email sent successfully via SendGrid to {to_email}")
+                    return True
+                else:
+                    logger.error(
+                        f"SendGrid API error: {response.status_code} - {response.text}"
+                    )
+                    return False
+                    
+        except Exception as e:
+            logger.error(f"Error sending email via SendGrid: {str(e)}", exc_info=True)
+            return False
+    
+    async def _send_via_mailgun(
+        self,
+        to_email: str,
+        subject: str,
+        html_content: str
+    ) -> bool:
+        """
+        Send email via Mailgun API.
+        
+        Args:
+            to_email: Recipient email address
+            subject: Email subject line
+            html_content: HTML content of the email
+            
+        Returns:
+            bool: True if successful, False otherwise
+        """
+        if not self.config.MAILGUN_API_KEY or not self.config.MAILGUN_DOMAIN:
+            logger.error("Mailgun API key or domain not configured")
+            return False
+        
+        url = f"https://api.mailgun.net/v3/{self.config.MAILGUN_DOMAIN}/messages"
+        
+        auth = ("api", self.config.MAILGUN_API_KEY)
+        
+        data = {
+            "from": f"{self.config.EMAIL_FROM_NAME} <{self.config.EMAIL_FROM}>",
+            "to": to_email,
+            "subject": subject,
+            "html": html_content
+        }
+        
+        try:
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                response = await client.post(url, auth=auth, data=data)
+                
+                if response.status_code == 200:
+                    logger.info(f"Email sent successfully via Mailgun to {to_email}")
+                    return True
+                else:
+                    logger.error(
+                        f"Mailgun API error: {response.status_code} - {response.text}"
+                    )
+                    return False
+                    
+        except Exception as e:
+            logger.error(f"Error sending email via Mailgun: {str(e)}", exc_info=True)
+            return False
     
     async def send_email_with_retry(
         self,
@@ -73,6 +193,7 @@ class EmailService:
     ):
         """
         Send email with exponential backoff retry logic.
+        Tries primary provider first, then fallback if available.
         
         Args:
             to_email: Recipient email address
@@ -90,106 +211,104 @@ class EmailService:
         if initial_delay is None:
             initial_delay = self.config.EMAIL_RETRY_DELAY
         
-        last_exception = None
-        
-        for attempt in range(max_retries):
-            try:
-                await self._send_email_internal(to_email, subject, html_content)
-                logger.info(f"Email sent successfully to {to_email} on attempt {attempt + 1}")
-                return
-            except (SMTPException, asyncio.TimeoutError, ConnectionError, OSError) as e:
-                last_exception = e
-                if attempt < max_retries - 1:
-                    delay = initial_delay * (2 ** attempt)  # Exponential backoff
-                    logger.warning(
-                        f"Failed to send email to {to_email} (attempt {attempt + 1}/{max_retries}): {str(e)}. "
-                        f"Retrying in {delay} seconds..."
-                    )
-                    await asyncio.sleep(delay)
-                else:
-                    logger.error(
-                        f"Failed to send email to {to_email} after {max_retries} attempts: {str(e)}",
-                        exc_info=True
-                    )
-            except Exception as e:
-                # For non-retryable exceptions, fail immediately
-                logger.error(f"Non-retryable error sending email to {to_email}: {str(e)}", exc_info=True)
-                raise
-        
-        # If we get here, all retries failed
-        raise Exception(f"Failed to send email after {max_retries} attempts: {str(last_exception)}")
-    
-    async def _send_email_internal(
-        self,
-        to_email: str,
-        subject: str,
-        html_content: str
-    ):
-        """
-        Internal method to send email via SMTP (without retry logic).
-        
-        Args:
-            to_email: Recipient email address
-            subject: Email subject line
-            html_content: HTML content of the email
-            
-        Raises:
-            Exception: If email sending fails
-        """
-        logger.info(f"Attempting to send email to {to_email}")
-        
         # Check if email notifications are enabled
         if not self.config.ENABLE_EMAIL_NOTIFICATIONS:
             logger.warning("Email notifications are disabled. Skipping email send.")
             return
         
         # Validate configuration
-        if not self.config.SMTP_USERNAME or not self.config.SMTP_PASSWORD:
-            logger.error("SMTP credentials not configured. Cannot send email.")
-            raise ValueError("SMTP credentials not configured")
+        if not self.primary_provider:
+            logger.error("No email provider configured. Please set up SendGrid or Mailgun.")
+            raise ValueError("No email provider configured")
         
-        if not self.config.EMAIL_FROM:
-            logger.error("EMAIL_FROM not configured. Cannot send email.")
-            raise ValueError("EMAIL_FROM not configured")
-        
-        # Create MIME message
-        message = MIMEMultipart("alternative")
-        message["Subject"] = subject
-        message["From"] = f"{self.config.EMAIL_FROM_NAME} <{self.config.EMAIL_FROM}>"
-        message["To"] = to_email
-        
-        # Attach HTML content
-        html_part = MIMEText(html_content, "html")
-        message.attach(html_part)
-        
-        # Connect to SMTP server and send email
-        logger.info(f"Connecting to SMTP server: {self.config.SMTP_HOST}:{self.config.SMTP_PORT}")
-        
-        # Use asyncio.wait_for to add an overall timeout
-        try:
-            async with asyncio.timeout(self.config.EMAIL_TIMEOUT):
-                async with SMTP(
-                    hostname=self.config.SMTP_HOST,
-                    port=self.config.SMTP_PORT,
-                    start_tls=True,  # Use STARTTLS for port 587
-                    timeout=60,  # Connection timeout
-                    use_tls=False  # Don't use TLS initially, we'll use STARTTLS
-                ) as smtp:
-                    # Login to SMTP server
-                    logger.debug(f"Logging in as: {self.config.SMTP_USERNAME}")
-                    await smtp.login(self.config.SMTP_USERNAME, self.config.SMTP_PASSWORD)
+        # Try primary provider with retries
+        for attempt in range(max_retries):
+            try:
+                success = await self._send_email_internal(
+                    to_email, subject, html_content, self.primary_provider
+                )
+                
+                if success:
+                    logger.info(
+                        f"Email sent successfully to {to_email} via {self.primary_provider} "
+                        f"on attempt {attempt + 1}"
+                    )
+                    return
+                
+                # If not successful and we have retries left, wait before retry
+                if attempt < max_retries - 1:
+                    delay = initial_delay * (2 ** attempt)  # Exponential backoff
+                    logger.warning(
+                        f"Failed to send email via {self.primary_provider} "
+                        f"(attempt {attempt + 1}/{max_retries}). "
+                        f"Retrying in {delay} seconds..."
+                    )
+                    await asyncio.sleep(delay)
                     
-                    # Send email
-                    logger.info(f"Sending email to: {to_email}")
-                    await smtp.send_message(message)
-                    
-                    logger.info(f"Email sent successfully to: {to_email}")
-        except asyncio.TimeoutError:
-            logger.error(f"Timeout while sending email to {to_email}")
-            raise
-        except Exception as e:
-            logger.error(f"Error sending email to {to_email}: {str(e)}", exc_info=True)
-            raise
+            except Exception as e:
+                logger.error(
+                    f"Error on attempt {attempt + 1} with {self.primary_provider}: {str(e)}"
+                )
+                if attempt < max_retries - 1:
+                    delay = initial_delay * (2 ** attempt)
+                    await asyncio.sleep(delay)
+        
+        # If primary provider failed, try fallback
+        if self.fallback_provider:
+            logger.warning(
+                f"Primary provider {self.primary_provider} failed. "
+                f"Trying fallback provider {self.fallback_provider}"
+            )
+            
+            try:
+                success = await self._send_email_internal(
+                    to_email, subject, html_content, self.fallback_provider
+                )
+                
+                if success:
+                    logger.info(
+                        f"Email sent successfully to {to_email} via fallback provider "
+                        f"{self.fallback_provider}"
+                    )
+                    return
+            except Exception as e:
+                logger.error(f"Fallback provider also failed: {str(e)}")
+        
+        # If we get here, all attempts failed
+        raise Exception(
+            f"Failed to send email to {to_email} after {max_retries} attempts "
+            f"with {self.primary_provider}" +
+            (f" and fallback {self.fallback_provider}" if self.fallback_provider else "")
+        )
+    
+    async def _send_email_internal(
+        self,
+        to_email: str,
+        subject: str,
+        html_content: str,
+        provider: str
+    ) -> bool:
+        """
+        Internal method to send email via specified provider.
+        
+        Args:
+            to_email: Recipient email address
+            subject: Email subject line
+            html_content: HTML content of the email
+            provider: Provider to use ('sendgrid' or 'mailgun')
+            
+        Returns:
+            bool: True if successful, False otherwise
+        """
+        logger.info(f"Attempting to send email to {to_email} via {provider}")
+        
+        if provider == "sendgrid":
+            return await self._send_via_sendgrid(to_email, subject, html_content)
+        elif provider == "mailgun":
+            return await self._send_via_mailgun(to_email, subject, html_content)
+        else:
+            logger.error(f"Unknown email provider: {provider}")
+            return False
     
     async def send_email(
         self,
@@ -198,7 +317,7 @@ class EmailService:
         html_content: str
     ):
         """
-        Core method to send email via SMTP with retry logic.
+        Core method to send email with retry logic.
         
         Args:
             to_email: Recipient email address
@@ -233,7 +352,6 @@ class EmailService:
             template = self.template_env.get_template("emails/match_notification.html")
             
             # Prepare template context
-            # Format created_at - handle both datetime objects and strings
             created_at_str = "Recently"
             if product.created_at:
                 try:
@@ -266,7 +384,6 @@ class EmailService:
             subject = f"New Match Found: {product.title[:50]}{'...' if len(product.title) > 50 else ''}"
             
             # Send email
-            logger.info(f"Sending match notification for product '{product.title}' to {email}")
             await self.send_email(
                 to_email=email,
                 subject=subject,
@@ -290,15 +407,12 @@ class EmailService:
         Args:
             email: Recipient email address
             matches: List of dictionaries containing product and search_request data
-                    Each dict should have: {'product': Product, 'search_request': SearchRequest}
             
         Raises:
             Exception: If email sending fails
         """
         logger.info(f"Preparing daily digest email for {email}")
         try:
-            from datetime import datetime
-            
             # Load and render template
             template = self.template_env.get_template("emails/daily_digest.html")
             
@@ -321,7 +435,6 @@ class EmailService:
                     })
             
             # Prepare template context
-            # Format date for template
             date_str = datetime.now().strftime('%B %d, %Y')
             context = {
                 "date": date_str,
@@ -339,7 +452,6 @@ class EmailService:
                 subject = "Daily Digest: No New Matches Today"
             
             # Send email
-            logger.info(f"Sending daily digest with {match_count} matches to {email}")
             await self.send_email(
                 to_email=email,
                 subject=subject,
@@ -372,7 +484,7 @@ class EmailService:
             # Load and render template
             template = self.template_env.get_template("emails/search_started.html")
             
-            # Build platforms list from boolean fields
+            # Build platforms list
             platforms = []
             if search_request.search_craigslist:
                 platforms.append("Craigslist")
@@ -382,7 +494,6 @@ class EmailService:
                 platforms.append("Facebook Marketplace")
             
             # Prepare template context
-            # Format created_at - handle both datetime objects and strings
             created_at_str = "Just now"
             if search_request.created_at:
                 try:
@@ -391,10 +502,9 @@ class EmailService:
                     elif hasattr(search_request.created_at, 'strftime'):
                         created_at_str = search_request.created_at.strftime("%Y-%m-%d %H:%M:%S")
                     else:
-                        # Fallback: convert to string
                         created_at_str = str(search_request.created_at)
                 except Exception as e:
-                    logger.warning(f"Could not format created_at: {e}, using 'Just now'")
+                    logger.warning(f"Could not format created_at: {e}")
                     created_at_str = "Just now"
             
             context = {
@@ -414,7 +524,6 @@ class EmailService:
             subject = f"Search Started: {search_request.product_name}"
             
             # Send email
-            logger.info(f"Sending search started confirmation for '{search_request.product_name}' to {email}")
             await self.send_email(
                 to_email=email,
                 subject=subject,
@@ -427,52 +536,4 @@ class EmailService:
             logger.error(f"Failed to send search started confirmation to {email}: {str(e)}", exc_info=True)
             raise Exception(f"Failed to send search started confirmation: {str(e)}")
 
-
-
-    async def prepare_daily_digest_data(
-        self, 
-        db: Session
-    ) -> Dict[str, List[Dict]]:
-        """
-        Prepare data for daily digest emails.
-        
-        Returns:
-            Dict mapping email addresses to their matches
-        """
-        from datetime import datetime, timedelta
-        
-        # 1. Calculate time range (last 24 hours)
-        yesterday = datetime.now() - timedelta(days=1)
-        
-        # 2. Get all matches from last 24 hours
-        recent_matches = db.query(Product).filter(
-            Product.created_at >= yesterday,
-            Product.is_match == True
-        ).all()
-        
-        # 3. Get all email preferences with digest enabled
-        email_prefs = db.query(EmailPreference).filter(
-            EmailPreference.include_in_digest == True
-        ).all()
-        
-        # 4. Group matches by email address
-        digest_data = {}
-        for pref in email_prefs:
-            # Get matches for this search request
-            matches = [
-                m for m in recent_matches 
-                if m.search_execution.search_request_id == pref.search_request_id
-            ]
-            
-            if matches:
-                if pref.email_address not in digest_data:
-                    digest_data[pref.email_address] = []
-                
-                # Add matches with search request info
-                for match in matches:
-                    digest_data[pref.email_address].append({
-                        'product': match,
-                        'search_request': pref.search_request
-                    })
-        
-        return digest_data
+# Made with Bob

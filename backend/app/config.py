@@ -197,6 +197,14 @@ class Settings(BaseSettings):
     # ============================================================================
     # Email Configuration
     # ============================================================================
+    
+    # Email Provider Selection
+    EMAIL_PROVIDER: str = Field(
+        default="http",
+        description="Email provider: 'smtp', 'http' (for SendGrid/Mailgun), or 'auto'"
+    )
+    
+    # SMTP Configuration (Legacy - for local development)
     SMTP_HOST: str = Field(
         default="smtp.gmail.com",
         description="SMTP server host"
@@ -215,9 +223,27 @@ class Settings(BaseSettings):
         default="",
         description="Gmail App Password (16 characters)"
     )
+    
+    # SendGrid Configuration (Recommended for production)
+    SENDGRID_API_KEY: str = Field(
+        default="",
+        description="SendGrid API key from https://app.sendgrid.com/"
+    )
+    
+    # Mailgun Configuration (Alternative to SendGrid)
+    MAILGUN_API_KEY: str = Field(
+        default="",
+        description="Mailgun API key from https://app.mailgun.com/"
+    )
+    MAILGUN_DOMAIN: str = Field(
+        default="",
+        description="Mailgun domain (e.g., mg.yourdomain.com)"
+    )
+    
+    # Common Email Settings
     EMAIL_FROM: str = Field(
         default="",
-        description="Sender email address (usually same as SMTP_USERNAME)"
+        description="Sender email address"
     )
     EMAIL_FROM_NAME: str = Field(
         default="Product Search Agent",

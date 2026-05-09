@@ -17,6 +17,11 @@ services:
         fromDatabase:
           name: product-search-db
           property: connectionString
+      # Email Provider Configuration
+      - key: EMAIL_PROVIDER
+        value: http
+      
+      # SMTP Configuration (Legacy - for local development)
       - key: SMTP_HOST
         sync: false
       - key: SMTP_PORT
@@ -25,8 +30,22 @@ services:
         sync: false
       - key: SMTP_PASSWORD
         sync: false
+      
+      # SendGrid Configuration (Recommended for production)
+      - key: SENDGRID_API_KEY
+        sync: false
+      
+      # Mailgun Configuration (Alternative to SendGrid)
+      - key: MAILGUN_API_KEY
+        sync: false
+      - key: MAILGUN_DOMAIN
+        sync: false
+      
+      # Common Email Settings
       - key: EMAIL_FROM
         sync: false
+      - key: EMAIL_FROM_NAME
+        value: Product Search Agent
       - key: ENABLE_EMAIL_NOTIFICATIONS
         value: true
       - key: FRONTEND_URL
