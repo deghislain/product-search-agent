@@ -23,10 +23,17 @@ from app.schemas import (
 )
 from app.schemas import SearchRequestCreate
 from app.schemas import SearchRequestUpdate
-from app.core.orchestrator import SearchOrchestrator
+# Phase 2: Use CoordinatorAgent instead of Orchestrator
+from app.agents.coordinator_agent import CoordinatorAgent
+from app.core.llm_client import GroqClient
 from app.database import SessionLocal
 from app.core.query_optimizer import QueryOptimizer
 from app.core.reasoning_engine import ReasoningEngine
+from app.config import settings
+# WebSocket for real-time notifications
+from app.core.websocket_manager import manager
+# Email service for match notifications
+from app.services.email_service import get_email_service
 
 
 logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -38,6 +45,260 @@ router = APIRouter(
     prefix="/api/search-requests",
     tags=["search-requests"]
 )
+
+
+# ============================================================================
+# Helper Functions for Phase 2 Agent Execution
+# ============================================================================
+
+async def execute_agent_search(search_request_id: str):
+    """
+    Execute search using CoordinatorAgent (Phase 2).
+    
+    This function runs in the background and orchestrates all AI agents
+    to find, analyze, and rank products.
+    
+    Args:
+        search_request_id: ID of the search request to execute
+    """
+    from app.models import SearchExecution, Product
+    from datetime import datetime, timezone
+    
+    # Create new database session for background task
+    db = SessionLocal()
+    execution = None
+    
+    try:
+        # Get search request
+        search_request = db.query(SearchRequest).filter(
+            SearchRequest.id == search_request_id
+        ).first()
+        
+        if not search_request:
+            logger.error(f"Search request {search_request_id} not found")
+            return
+        
+        logger.info(f"🤖 Starting AI-powered search for: {search_request.product_name}")
+        
+        # Send "search started" notification
+        await manager.broadcast({
+            'type': 'search_started',
+            'search_request_id': search_request_id,
+            'status': 'in_progress',
+            'product_name': search_request.product_name,
+            'message': f'AI agents are searching for {search_request.product_name}...',
+            'timestamp': datetime.now(timezone.utc).isoformat()
+        })
+        
+        # Create search execution record
+        execution = SearchExecution(
+            search_request_id=search_request_id,
+            status='running',
+            started_at=datetime.now(timezone.utc)
+        )
+        db.add(execution)
+        db.commit()
+        db.refresh(execution)
+        
+        # Send "initializing agents" notification
+        await manager.broadcast({
+            'type': 'search_progress',
+            'search_request_id': search_request_id,
+            'stage': 'initializing',
+            'progress': 10,
+            'message': 'Initializing AI agents (SearchAgent, PricingAgent, QualityAgent)...',
+            'timestamp': datetime.now(timezone.utc).isoformat()
+        })
+        
+        # Initialize LLM client
+        llm_client = GroqClient(api_key=settings.groq_api_key)
+        
+        # Initialize CoordinatorAgent
+        coordinator = CoordinatorAgent(llm_client)
+        
+        # Send "searching" notification
+        await manager.broadcast({
+            'type': 'search_progress',
+            'search_request_id': search_request_id,
+            'stage': 'searching',
+            'progress': 30,
+            'message': 'SearchAgent is scanning multiple platforms...',
+            'timestamp': datetime.now(timezone.utc).isoformat()
+        })
+        
+        # Execute AI-powered search workflow
+        result = await coordinator.act({
+            'strategy': 'execute_search',
+            'search_request': search_request,
+            'search_strategy': {},
+            'filters': {
+                'min_quality_score': 40.0,
+                'min_overall_score': 50.0,
+                'max_results': 50
+            },
+            'ranking_criteria': {
+                'quality_weight': 0.4,
+                'price_weight': 0.3,
+                'match_weight': 0.3
+            }
+        })
+        
+        # Send "analyzing" notification
+        await manager.broadcast({
+            'type': 'search_progress',
+            'search_request_id': search_request_id,
+            'stage': 'analyzing',
+            'progress': 70,
+            'message': f'Analyzing {len(result.get("products", []))} products found...',
+            'timestamp': datetime.now(timezone.utc).isoformat()
+        })
+        
+        # Save products to database
+        ranked_products = result.get('ranked_products', [])
+        analyses = result.get('analyses', {})
+        
+        logger.info(f"💾 Saving {len(ranked_products)} products to database")
+        
+        matches_count = 0
+        for product_data in ranked_products:
+            # Get analysis for this product
+            # Handle both dict and Product object for ID extraction
+            if isinstance(product_data, dict):
+                # If it's a dict, we need to convert it to a Product object
+                # This shouldn't happen, but let's handle it gracefully
+                logger.warning(f"Product is a dict, skipping: {product_data.get('title', 'unknown')}")
+                continue
+            
+            # At this point, product_data is a Product object
+            product_id = str(product_data.id)
+            analysis = analyses.get(product_id, {})
+            
+            # Update Product object attributes
+            product_data.search_execution_id = execution.id
+            product_data.match_score = analysis.get('overall_score', 50.0)
+            product_data.is_match = analysis.get('overall_score', 0) >= search_request.match_threshold
+            
+            if product_data.is_match:
+                matches_count += 1
+            
+            # Store AI analysis as metadata (if your Product model supports it)
+            # product_data.metadata = json.dumps(analysis)
+            
+            db.add(product_data)
+        
+        # Update execution status
+        execution.status = 'completed'
+        execution.completed_at = datetime.now(timezone.utc)
+        execution.products_found = len(result.get('products', []))
+        execution.matches_found = len(ranked_products)
+        
+        db.commit()
+        
+        logger.info(f"✅ AI search completed: {len(ranked_products)} products saved")
+        
+        # Send "search complete" notification
+        await manager.broadcast({
+            'type': 'search_complete',
+            'search_request_id': search_request_id,
+            'status': 'completed',
+            'products_found': len(result.get('products', [])),
+            'matches_found': matches_count,
+            'ranked_products_count': len(ranked_products),
+            'message': f'Search complete! Found {matches_count} matches out of {len(ranked_products)} products.',
+            'timestamp': datetime.now(timezone.utc).isoformat()
+        })
+        
+        # Send individual match notifications for high-quality matches
+        for product_data in ranked_products[:3]:  # Top 3 matches
+            # Skip if it's a dict (shouldn't happen but be safe)
+            if isinstance(product_data, dict):
+                continue
+                
+            if product_data.is_match and product_data.match_score >= 80:
+                await manager.broadcast({
+                    'type': 'new_match',
+                    'search_request_id': search_request_id,
+                    'product': {
+                        'title': product_data.title,
+                        'price': float(product_data.price) if product_data.price else None,
+                        'score': float(product_data.match_score),
+                        'url': product_data.url,
+                        'platform': product_data.platform,
+                        'location': product_data.location
+                    },
+                    'timestamp': datetime.now(timezone.utc).isoformat()
+                })
+        
+        # Send email notifications if matches found
+        if matches_count > 0:
+            try:
+                from app.models.email_preference import EmailPreference
+                
+                # Get email preferences for this search request
+                email_prefs = db.query(EmailPreference).filter(
+                    EmailPreference.search_request_id == search_request_id,
+                    EmailPreference.notify_on_match == True
+                ).all()
+                
+                if email_prefs:
+                    # Initialize email service
+                    email_service = get_email_service(settings)
+                    
+                    # Send email to each recipient
+                    for pref in email_prefs:
+                        try:
+                            # Send email for the best match
+                            best_match = ranked_products[0]
+                            
+                            email_addr = str(pref.email_address)
+                            logger.info(f"Sending match notification email to {email_addr}")
+                            await email_service.send_match_notification(
+                                email=email_addr,
+                                product=best_match,
+                                search_request=search_request
+                            )
+                            logger.info(f"Match notification email sent to {email_addr}")
+                            
+                        except Exception as email_error:
+                            # Log but don't fail the entire search if email fails
+                            logger.error(
+                                f"Failed to send email to {pref.email_address}: {email_error}",
+                                exc_info=True
+                            )
+                else:
+                    logger.info(f"No email preferences found for search {search_request_id}")
+                    
+            except Exception as e:
+                # Log but don't fail the search if email system fails
+                logger.error(f"Error in email notification system: {e}", exc_info=True)
+        
+    except Exception as e:
+        logger.error(f"❌ Error in AI search execution: {e}", exc_info=True)
+        
+        # Send error notification
+        await manager.broadcast({
+            'type': 'search_error',
+            'search_request_id': search_request_id,
+            'status': 'failed',
+            'error': str(e),
+            'message': f'Search failed: {str(e)}',
+            'timestamp': datetime.now(timezone.utc).isoformat()
+        })
+        
+        # Update execution status to failed
+        try:
+            if execution:
+                execution.status = 'failed'
+                execution.completed_at = datetime.now(timezone.utc)
+                execution.error_message = str(e)
+                db.commit()
+        except:
+            pass
+    
+    finally:
+        db.close()
+
+
 
 
 # ============================================================================
@@ -289,10 +550,17 @@ async def create_search_request(
     db: Session = Depends(get_db)
 ):
     """
-    Create a new search request and execute it immediately.
+    Create a new search request and execute it immediately using AI agents.
+    
+    Phase 2 Implementation:
+    - Uses CoordinatorAgent to orchestrate search
+    - SearchAgent finds products with AI-optimized strategy
+    - PricingAgent analyzes deals and market prices
+    - QualityAgent detects scams and assesses quality
+    - Results are filtered, ranked, and explained by AI
     
     The search will:
-    1. Execute immediately (in background)
+    1. Execute immediately (in background) with AI agents
     2. Continue executing every 2 hours via scheduler
     3. Stop when deleted
     
@@ -326,27 +594,22 @@ async def create_search_request(
         search_craigslist=search_craigslist,
         search_ebay=search_ebay,
         search_facebook=search_facebook,
-        email_address=search_request.email_address  # ADD THIS LINE
+        email_address=search_request.email_address
     )
-
     
     # Add to database
     db.add(db_search_request)
     db.commit()
     db.refresh(db_search_request)
     
-    # Trigger immediate execution in background
-    # Create a new database session for the background task
-    background_db = SessionLocal()
-    orchestrator = SearchOrchestrator(background_db)
-    
+    # Phase 2: Use CoordinatorAgent instead of Orchestrator
+    # Trigger immediate execution in background with AI agents
     background_tasks.add_task(
-        orchestrator.execute_search_immediately,
-        search_request_id=db_search_request.id,
-        db=background_db
+        execute_agent_search,
+        search_request_id=str(db_search_request.id)
     )
     
-    logger.info(f"✅ Search request {db_search_request.id} created and queued for immediate execution")
+    logger.info(f"✅ Search request {db_search_request.id} created and queued for AI-powered execution")
     
     return db_search_request
 

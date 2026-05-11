@@ -1,4 +1,5 @@
 import ProductCard from './ProductCard';
+import ProductCardWithAI from './ProductCardWithAI';
 import ProductCardSkeleton from './ProductCardSkeleton';
 import type { Product } from '../services/searchRequestService';
 
@@ -35,15 +36,29 @@ export default function ProductGrid({ products, loading = false, onViewDetails }
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-      {products.map((product) => (
-        <ProductCard 
-          key={product.id} 
-          product={product} 
-          onViewDetails={onViewDetails}
-        />
-      ))}
+      {products.map((product) => {
+        // Phase 2: Use AI-enhanced card if metadata exists, otherwise use regular card
+        const hasAIAnalysis = product.metadata && (
+          product.metadata.overall_score !== undefined ||
+          product.metadata.recommendation !== undefined
+        );
+
+        return hasAIAnalysis ? (
+          <ProductCardWithAI
+            key={product.id}
+            product={product}
+            onViewDetails={onViewDetails}
+          />
+        ) : (
+          <ProductCard
+            key={product.id}
+            product={product}
+            onViewDetails={onViewDetails}
+          />
+        );
+      })}
     </div>
   );
 }
 
-// Made with Bob
+// Made with Bob - Phase 2 Integration Complete

@@ -14,6 +14,26 @@ export interface SearchRequest {
   updated_at?: string;
 }
 
+export interface AIAnalysis {
+  overall_score?: number;
+  quality_score?: number;
+  price_score?: number;
+  recommendation?: 'buy_now' | 'good_deal' | 'fair_price' | 'wait' | 'negotiate' | 'avoid';
+  reasoning?: string;
+  price_analysis?: {
+    market_comparison?: string;
+    is_good_deal?: boolean;
+    recommendation?: string;
+  };
+  quality_analysis?: {
+    quality_score?: number;
+    scam_probability?: number;
+    red_flags?: string[];
+    positive_signals?: string[];
+    recommendation?: string;
+  };
+}
+
 export interface Product {
      id: string;  // UUID string
      title: string;
@@ -25,6 +45,8 @@ export interface Product {
      image_url?: string;
      match_score?: number;
      created_at: string;
+     // AI Analysis metadata (Phase 2)
+     metadata?: AIAnalysis;
    }
 
 

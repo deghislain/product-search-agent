@@ -25,16 +25,24 @@ export default function Matches() {
   const fetchSearchesAndProducts = async () => {
     try {
       setLoading(true);
-      // Fetch all active searches
+      // Fetch all searches (active and completed)
       const searches = await getSearchRequests();
-      const activeSearches = searches.filter(s => s.status === 'active');
-      setAllSearches(activeSearches);
+      // Show active and completed searches (exclude only cancelled/failed)
+      const relevantSearches = searches.filter(s =>
+        s.status === 'active' || s.status === 'completed'
+      );
+      setAllSearches(relevantSearches);
       
-      // Set the first active search as default
-      if (activeSearches.length > 0) {
-        setActiveSearch(activeSearches[0]);
+      // Set the first search as default (prefer completed, then active)
+      const completedSearches = relevantSearches.filter(s => s.status === 'completed');
+      const defaultSearch = completedSearches.length > 0
+        ? completedSearches[0]
+        : relevantSearches[0];
+      
+      if (defaultSearch) {
+        setActiveSearch(defaultSearch);
       } else {
-        setError('No active searches found. Create a search to see matches.');
+        setError('No searches found. Create a search to see matches.');
         setLoading(false);
       }
     } catch (err) {
