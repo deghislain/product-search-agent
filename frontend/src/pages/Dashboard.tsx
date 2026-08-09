@@ -1,9 +1,120 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import SearchRequestList from '../components/SearchRequestList';
 import SearchRequestForm from '../components/SearchRequestForm';
 import { createSearchRequest, getSearchRequests } from '../services/searchRequestService';
 import { getMatchingProducts } from '../services/productService';
+import { useNotifications } from '../components/NotificationManager';
+import type { LogEntry } from '../components/NotificationManager';
 
+
+// Stage → colour and icon for the log
+const STAGE_ICON: Record<string, string> = {
+  starting:     '🚀',
+  initializing: '⚙️',
+  searching:    '🔍',
+  analyzing:    '🤖',
+  pricing:      '💰',
+  quality:      '✅',
+  saving:       '💾',
+  completed:    '🎉',
+  failed:       '❌',
+  processing:   '⏳',
+};
+
+function formatTime(d: Date) {
+  return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+}
+
+function LogPanel() {
+  const { logEntries, logMinimised, setLogMinimised, clearLog, isRunning } = useNotifications();
+  const logEndRef = useRef<HTMLDivElement>(null);
+  const hasActivity = logEntries.length > 0;
+
+  useEffect(() => {
+    if (!logMinimised) {
+      logEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [logEntries, logMinimised]);
+
+  return (
+    <div className="mb-8 bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden">
+      {/* Panel header */}
+      <div className="flex items-center justify-between px-4 py-3 bg-gray-50 border-b border-gray-200">
+        <div className="flex items-center gap-2">
+          <span className="text-base leading-none">🤖</span>
+          <span className="text-sm font-semibold text-gray-700">AI Agent Activity</span>
+          {isRunning && (
+            <span className="inline-flex h-2 w-2 rounded-full bg-blue-500 animate-pulse" />
+          )}
+          {hasActivity && (
+            <span className="text-xs text-gray-400 font-normal">
+              ({logEntries.length} {logEntries.length === 1 ? 'entry' : 'entries'})
+            </span>
+          )}
+        </div>
+        <div className="flex items-center gap-1">
+          {hasActivity && (
+            <button
+              onClick={clearLog}
+              className="text-gray-400 hover:text-red-500 text-xs px-2 py-0.5 rounded hover:bg-gray-100 transition-colors"
+              title="Clear log"
+            >
+              Clear
+            </button>
+          )}
+          <button
+            onClick={() => setLogMinimised(v => !v)}
+            className="text-gray-400 hover:text-gray-600 text-xs font-medium px-2 py-0.5 rounded hover:bg-gray-100 transition-colors"
+            title={logMinimised ? 'Expand log' : 'Collapse log'}
+          >
+            {logMinimised ? '▼ Show' : '▲ Hide'}
+          </button>
+        </div>
+      </div>
+
+      {/* Log body */}
+      {!logMinimised && (
+        <div className="overflow-y-auto px-4 py-3 space-y-2" style={{ maxHeight: '18rem' }}>
+          {hasActivity ? (
+            <>
+              {logEntries.map((entry: LogEntry) => {
+                const icon = STAGE_ICON[entry.stage] ?? '⏳';
+                const pct  = Math.min(100, Math.max(0, entry.progress));
+                const barColor =
+                  entry.stage === 'completed' ? 'bg-green-500' :
+                  entry.stage === 'failed'    ? 'bg-red-500'   : 'bg-blue-500';
+
+                return (
+                  <div key={entry.id} className="text-xs border-b border-gray-100 pb-2 last:border-0 last:pb-0">
+                    <div className="flex items-baseline gap-1.5">
+                      <span className="shrink-0 leading-none">{icon}</span>
+                      <span className="font-medium text-gray-800 flex-1 min-w-0 break-words leading-snug">
+                        {entry.message}
+                      </span>
+                      <span className="shrink-0 text-gray-400 tabular-nums">{pct}%</span>
+                      <span className="shrink-0 text-gray-300 tabular-nums">{formatTime(entry.timestamp)}</span>
+                    </div>
+                    <div className="mt-1 w-full bg-gray-100 rounded-full h-1">
+                      <div
+                        className={`h-1 rounded-full transition-all duration-500 ${barColor}`}
+                        style={{ width: `${pct}%` }}
+                      />
+                    </div>
+                  </div>
+                );
+              })}
+              <div ref={logEndRef} />
+            </>
+          ) : (
+            <p className="text-xs text-gray-400 text-center py-6">
+              No activity yet. Logs will appear here when a search runs.
+            </p>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
 
 export default function Dashboard() {
   const [showForm, setShowForm] = useState(false);
@@ -123,6 +234,9 @@ export default function Dashboard() {
             />
           </div>
         )}
+
+        {/* AI Agent Activity Log — inline, below stat cards */}
+        <LogPanel />
 
         {/* Search Requests List */}
         <div>

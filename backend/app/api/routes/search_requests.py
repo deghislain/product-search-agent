@@ -154,37 +154,79 @@ async def execute_agent_search(search_request_id: str):
         })
         
         # Save products to database
+        # ranked_products contains the raw product objects/dicts from the coordinator.
+        # They may be dicts (from scrapers) or unsaved Product ORM objects without an id yet.
+        # We normalise everything into fresh Product ORM objects with the correct
+        # search_execution_id before persisting.
         ranked_products = result.get('ranked_products', [])
         analyses = result.get('analyses', {})
-        
+
         logger.info(f"💾 Saving {len(ranked_products)} products to database")
-        
+
         matches_count = 0
         for product_data in ranked_products:
-            # Get analysis for this product
-            # Handle both dict and Product object for ID extraction
-            if isinstance(product_data, dict):
-                # If it's a dict, we need to convert it to a Product object
-                # This shouldn't happen, but let's handle it gracefully
-                logger.warning(f"Product is a dict, skipping: {product_data.get('title', 'unknown')}")
-                continue
-            
-            # At this point, product_data is a Product object
-            product_id = str(product_data.id)
-            analysis = analyses.get(product_id, {})
-            
-            # Update Product object attributes
-            product_data.search_execution_id = execution.id
-            product_data.match_score = analysis.get('overall_score', 50.0)
-            product_data.is_match = analysis.get('overall_score', 0) >= search_request.match_threshold
-            
-            if product_data.is_match:
-                matches_count += 1
-            
-            # Store AI analysis as metadata (if your Product model supports it)
-            # product_data.metadata = json.dumps(analysis)
-            
-            db.add(product_data)
+            try:
+                # ── Normalise to a plain-dict of attributes ──────────────────
+                if isinstance(product_data, dict):
+                    attrs = product_data
+                else:
+                    # It's a Product ORM object (possibly unsaved / id == None)
+                    attrs = {
+                        'title':       getattr(product_data, 'title', ''),
+                        'description': getattr(product_data, 'description', None),
+                        'price':       getattr(product_data, 'price', 0.0),
+                        'url':         getattr(product_data, 'url', ''),
+                        'image_url':   getattr(product_data, 'image_url', None),
+                        'platform':    getattr(product_data, 'platform', ''),
+                        'location':    getattr(product_data, 'location', None),
+                        'posted_date': getattr(product_data, 'posted_date', None),
+                    }
+
+                # ── Skip entries without a URL (can't deduplicate without it) ─
+                url = attrs.get('url', '').strip()
+                if not url:
+                    logger.warning("Skipping product with no URL")
+                    continue
+
+                # ── Deduplicate by URL ────────────────────────────────────────
+                existing = db.query(Product).filter(Product.url == url).first()
+                if existing:
+                    logger.debug(f"Product already in DB (url={url[:60]}), skipping")
+                    continue
+
+                # ── Retrieve the analysis that was stored under the temp id ───
+                # The coordinator stores analyses keyed by the unsaved product's id
+                # (which may be None/unknown).  Fall back to an empty dict.
+                temp_id = str(getattr(product_data, 'id', 'unknown')) if not isinstance(product_data, dict) else 'unknown'
+                analysis = analyses.get(temp_id, {})
+                overall_score = analysis.get('overall_score', 50.0)
+
+                # ── Build a fresh ORM object with all required fields ─────────
+                from datetime import datetime as _dt
+                new_product = Product(
+                    search_execution_id=execution.id,          # NOT NULL — set here
+                    title=attrs.get('title', ''),
+                    description=attrs.get('description'),
+                    price=float(attrs.get('price') or 0.0),
+                    url=url,
+                    image_url=attrs.get('image_url'),
+                    platform=attrs.get('platform', ''),
+                    location=attrs.get('location'),
+                    posted_date=attrs.get('posted_date'),
+                    match_score=overall_score,
+                    is_match=overall_score >= search_request.match_threshold,
+                    created_at=_dt.utcnow(),
+                )
+
+                if new_product.is_match:
+                    matches_count += 1
+
+                db.add(new_product)
+                db.flush()   # assign id immediately so later queries can see it
+                logger.debug(f"Staged product for save: {new_product.title[:50]} (score={overall_score:.1f})")
+
+            except Exception as save_err:
+                logger.error(f"Failed to stage product for saving: {save_err}", exc_info=True)
         
         # Update execution status
         execution.status = 'completed'

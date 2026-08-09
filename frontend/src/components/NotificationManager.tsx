@@ -1,4 +1,4 @@
-import { useState, createContext, useContext, useRef, useEffect } from 'react';
+import { useState, createContext, useContext } from 'react';
 import type { ReactNode } from 'react';
 import MatchNotification from './MatchNotification';
 import type { Product } from '../services/searchRequestService';
@@ -36,6 +36,12 @@ interface NotificationContextType {
   showToast: (message: string, type: 'info' | 'success' | 'error' | 'warning') => void;
   updateSearchProgress: (progress: SearchProgress) => void;
   clearSearchProgress: (searchRequestId: string) => void;
+  // Exposed so consumers (e.g. Dashboard) can render the log inline
+  logEntries: LogEntry[];
+  logMinimised: boolean;
+  setLogMinimised: (v: boolean | ((prev: boolean) => boolean)) => void;
+  clearLog: () => void;
+  isRunning: boolean;
 }
 
 const NotificationContext = createContext<NotificationContextType | null>(null);
@@ -46,20 +52,6 @@ export const useNotifications = () => {
     throw new Error('useNotifications must be used within NotificationProvider');
   }
   return context;
-};
-
-// Stage → icon
-const stageIcon: Record<string, string> = {
-  starting:    '🚀',
-  initializing:'⚙️',
-  searching:   '🔍',
-  analyzing:   '🤖',
-  pricing:     '💰',
-  quality:     '✅',
-  saving:      '💾',
-  completed:   '🎉',
-  failed:      '❌',
-  processing:  '⏳',
 };
 
 function getToastBg(type: string) {
@@ -80,24 +72,12 @@ function getToastIcon(type: string) {
   }
 }
 
-function formatTime(d: Date) {
-  return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-}
-
 export function NotificationProvider({ children }: { children: ReactNode }) {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [toasts, setToasts]               = useState<Toast[]>([]);
   // Accumulated log entries — never replaced, only appended
   const [logEntries, setLogEntries]        = useState<LogEntry[]>([]);
   const [logMinimised, setLogMinimised]    = useState(false);
-  const logEndRef                          = useRef<HTMLDivElement>(null);
-
-  // Auto-scroll to the latest log line
-  useEffect(() => {
-    if (!logMinimised) {
-      logEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-    }
-  }, [logEntries, logMinimised]);
 
   const addNotification = (product: Product) => {
     setNotifications(prev => [...prev, { id: `${product.id}-${Date.now()}`, product }]);
@@ -134,7 +114,6 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
 
   const clearLog = () => setLogEntries([]);
 
-  const hasActivity = logEntries.length > 0;
   // Is any search still running (last entry for that ID is not completed/failed)?
   const activeIds = new Set(
     logEntries
@@ -144,7 +123,7 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
   const isRunning = activeIds.size > 0;
 
   return (
-    <NotificationContext.Provider value={{ addNotification, showToast, updateSearchProgress, clearSearchProgress }}>
+    <NotificationContext.Provider value={{ addNotification, showToast, updateSearchProgress, clearSearchProgress, logEntries, logMinimised, setLogMinimised, clearLog, isRunning }}>
       {children}
 
       {/* ── Match notifications — top-right ── */}
@@ -177,81 +156,6 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
         ))}
       </div>
 
-      {/* ── Agent Activity Log — fixed top-left, below the nav bar ── */}
-      <div
-        className="fixed left-4 top-28 z-50 bg-white border border-gray-200 rounded-xl shadow-xl flex flex-col"
-        style={{ width: '26rem' }}
-      >
-        {/* Header */}
-        <div className="flex items-center justify-between px-4 py-2 border-b border-gray-100 bg-gray-50 rounded-t-xl shrink-0">
-          <div className="flex items-center gap-2">
-            <span className="text-base">🤖</span>
-            <span className="text-sm font-semibold text-gray-700">AI Agent Activity</span>
-            {isRunning && (
-              <span className="inline-flex h-2 w-2 rounded-full bg-blue-500 animate-pulse" />
-            )}
-          </div>
-          <div className="flex items-center gap-1">
-            {hasActivity && (
-              <button
-                onClick={clearLog}
-                className="text-gray-400 hover:text-red-500 text-xs px-2 py-0.5 rounded hover:bg-gray-100 transition-colors"
-                title="Clear log"
-              >
-                Clear
-              </button>
-            )}
-            <button
-              onClick={() => setLogMinimised(v => !v)}
-              className="text-gray-400 hover:text-gray-600 text-xs font-medium px-2 py-0.5 rounded hover:bg-gray-100 transition-colors"
-              title={logMinimised ? 'Expand' : 'Minimise'}
-            >
-              {logMinimised ? '▲' : '▼'}
-            </button>
-          </div>
-        </div>
-
-        {/* Log lines — scrollable, never auto-cleared */}
-        {!logMinimised && (
-          <div className="overflow-y-auto px-3 py-2 space-y-1" style={{ maxHeight: '22rem' }}>
-            {hasActivity ? (
-              <>
-                {logEntries.map(entry => {
-                  const icon = stageIcon[entry.stage] ?? '⏳';
-                  const pct  = Math.min(100, Math.max(0, entry.progress));
-
-                  return (
-                    <div key={entry.id} className="text-xs border-b border-gray-50 pb-1.5 last:border-0">
-                      {/* Row: icon · stage · pct · time */}
-                      <div className="flex items-center gap-1.5">
-                        <span className="shrink-0">{icon}</span>
-                        <span className="font-medium text-gray-700 truncate flex-1">{entry.message}</span>
-                        <span className="shrink-0 text-gray-400">{pct}%</span>
-                        <span className="shrink-0 text-gray-300">{formatTime(entry.timestamp)}</span>
-                      </div>
-                      {/* Progress bar */}
-                      <div className="mt-1 w-full bg-gray-100 rounded-full h-1">
-                        <div
-                          className={`h-1 rounded-full transition-all duration-500 ${
-                            entry.stage === 'completed' ? 'bg-green-500' :
-                            entry.stage === 'failed'    ? 'bg-red-500'   : 'bg-blue-500'
-                          }`}
-                          style={{ width: `${pct}%` }}
-                        />
-                      </div>
-                    </div>
-                  );
-                })}
-                <div ref={logEndRef} />
-              </>
-            ) : (
-              <p className="text-xs text-gray-400 text-center py-4">
-                No active searches. Logs will appear here.
-              </p>
-            )}
-          </div>
-        )}
-      </div>
     </NotificationContext.Provider>
   );
 }
