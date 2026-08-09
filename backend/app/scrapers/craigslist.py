@@ -143,6 +143,7 @@ class CraigslistScraper(BaseScraper):
             >>> print(url)
             'https://sfbay.craigslist.org/search/sss?query=iPhone&min_price=500&max_price=1000'
         """
+        logger.debug(f"***********************************✓ Location: {location}")
         # Base URL for location
         base = f"https://{location}.craigslist.org/search/{category}"
         

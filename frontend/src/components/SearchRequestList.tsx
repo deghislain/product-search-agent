@@ -76,62 +76,64 @@ export default function SearchRequestList() {
       {searches.map((search, index) => (
         <div
           key={search.id}
-          className="bg-white shadow-md rounded-lg p-6 hover:shadow-lg transition-all duration-300 animate-fade-in"
+           className="bg-white shadow-md rounded-lg p-6 hover:shadow-lg transition-all duration-300 animate-fade-in flex items-center"
           style={{ animationDelay: `${index * 0.1}s` }}
         >
-          <div className="flex justify-between items-start">
-            <div className="flex-1">
-              <h3 className="text-xl font-semibold text-gray-800 mb-2">
-                {search.product_name}
-              </h3>
-              
-              <p className="text-sm text-gray-600 mb-3">
-                {search.product_description}
+          {/* Left spacer — mirrors the right column to keep content truly centred */}
+          <div className="flex-1" />
+
+          {/* Centred content */}
+          <div className="flex flex-col items-center text-center">
+            <h3 className="text-xl font-semibold text-gray-800 mb-2">
+              {search.product_name}
+            </h3>
+
+            <p className="text-sm text-gray-600 mb-3">
+              {search.product_description}
+            </p>
+
+            <div className="flex flex-wrap justify-center gap-2 mb-3">
+              {search.platforms.map((platform) => (
+                <span
+                  key={platform}
+                  className="px-3 py-1 bg-blue-100 text-blue-800 text-sm rounded-full"
+                >
+                  {platform}
+                </span>
+              ))}
+            </div>
+
+            <div className="text-sm text-gray-600 space-y-1">
+              <p>Budget: ${search.budget}</p>
+              {search.location && (
+                <p>Location: {search.location}</p>
+              )}
+              {search.match_threshold && (
+                <p>Match Threshold: {search.match_threshold}%</p>
+              )}
+              <p className="text-xs text-gray-400">
+                Created: {new Date(search.created_at!).toLocaleDateString()}
               </p>
-              
-              <div className="flex flex-wrap gap-2 mb-3">
-                {search.platforms.map((platform) => (
-                  <span
-                    key={platform}
-                    className="px-3 py-1 bg-blue-100 text-blue-800 text-sm rounded-full"
-                  >
-                    {platform}
-                  </span>
-                ))}
-              </div>
-
-              <div className="text-sm text-gray-600 space-y-1">
-                <p>Budget: ${search.budget}</p>
-                {search.location && (
-                  <p>Location: {search.location}</p>
-                )}
-                {search.match_threshold && (
-                  <p>Match Threshold: {search.match_threshold}%</p>
-                )}
-                <p className="text-xs text-gray-400">
-                  Created: {new Date(search.created_at!).toLocaleDateString()}
-                </p>
-              </div>
             </div>
+          </div>
 
-            <div className="flex flex-col space-y-2 ml-4">
-              <span className={`px-3 py-1 rounded text-sm font-medium ${
-                search.status === 'active'
-                  ? 'bg-green-100 text-green-800'
-                  : search.status === 'paused'
-                  ? 'bg-yellow-100 text-yellow-800'
-                  : 'bg-gray-100 text-gray-800'
-              }`}>
-                {search.status.charAt(0).toUpperCase() + search.status.slice(1)}
-              </span>
-              
-              <button
-                onClick={() => handleDelete(search.id!)}
-                className="px-3 py-1 bg-red-500 hover:bg-red-700 text-white text-sm rounded"
-              >
-                Delete
-              </button>
-            </div>
+          {/* Right column — status badge + Delete pushed to the far right */}
+          <div className="flex-1 flex flex-col items-end gap-2">
+            <span className={`px-3 py-1 rounded text-sm font-medium ${
+              search.status === 'active'
+                ? 'bg-green-100 text-green-800'
+                : search.status === 'paused'
+                ? 'bg-yellow-100 text-yellow-800'
+                : 'bg-gray-100 text-gray-800'
+            }`}>
+              {search.status.charAt(0).toUpperCase() + search.status.slice(1)}
+            </span>
+            <button
+              onClick={() => handleDelete(search.id!)}
+              className="px-3 py-1 bg-red-500 hover:bg-red-700 text-white text-sm rounded"
+            >
+              Delete
+            </button>
           </div>
         </div>
       ))}

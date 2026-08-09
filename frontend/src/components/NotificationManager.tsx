@@ -1,4 +1,4 @@
-import { useState, createContext, useContext, useEffect } from 'react';
+import { useState, createContext, useContext, useRef, useEffect } from 'react';
 import type { ReactNode } from 'react';
 import MatchNotification from './MatchNotification';
 import type { Product } from '../services/searchRequestService';
@@ -6,6 +6,16 @@ import type { Product } from '../services/searchRequestService';
 interface Notification {
   id: string;
   product: Product;
+}
+
+// One line in the activity log
+export interface LogEntry {
+  id: string;
+  searchRequestId: string;
+  stage: string;
+  progress: number;
+  message: string;
+  timestamp: Date;
 }
 
 interface SearchProgress {
@@ -38,17 +48,59 @@ export const useNotifications = () => {
   return context;
 };
 
+// Stage → icon
+const stageIcon: Record<string, string> = {
+  starting:    '🚀',
+  initializing:'⚙️',
+  searching:   '🔍',
+  analyzing:   '🤖',
+  pricing:     '💰',
+  quality:     '✅',
+  saving:      '💾',
+  completed:   '🎉',
+  failed:      '❌',
+  processing:  '⏳',
+};
+
+function getToastBg(type: string) {
+  switch (type) {
+    case 'success': return 'bg-green-600';
+    case 'error':   return 'bg-red-600';
+    case 'warning': return 'bg-yellow-500';
+    default:        return 'bg-blue-600';
+  }
+}
+
+function getToastIcon(type: string) {
+  switch (type) {
+    case 'success': return '✅';
+    case 'error':   return '❌';
+    case 'warning': return '⚠️';
+    default:        return 'ℹ️';
+  }
+}
+
+function formatTime(d: Date) {
+  return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+}
+
 export function NotificationProvider({ children }: { children: ReactNode }) {
   const [notifications, setNotifications] = useState<Notification[]>([]);
-  const [toasts, setToasts] = useState<Toast[]>([]);
-  const [searchProgress, setSearchProgress] = useState<Map<string, SearchProgress>>(new Map());
+  const [toasts, setToasts]               = useState<Toast[]>([]);
+  // Accumulated log entries — never replaced, only appended
+  const [logEntries, setLogEntries]        = useState<LogEntry[]>([]);
+  const [logMinimised, setLogMinimised]    = useState(false);
+  const logEndRef                          = useRef<HTMLDivElement>(null);
+
+  // Auto-scroll to the latest log line
+  useEffect(() => {
+    if (!logMinimised) {
+      logEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [logEntries, logMinimised]);
 
   const addNotification = (product: Product) => {
-    const notification: Notification = {
-      id: `${product.id}-${Date.now()}`,
-      product,
-    };
-    setNotifications(prev => [...prev, notification]);
+    setNotifications(prev => [...prev, { id: `${product.id}-${Date.now()}`, product }]);
   };
 
   const removeNotification = (id: string) => {
@@ -56,117 +108,149 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
   };
 
   const showToast = (message: string, type: 'info' | 'success' | 'error' | 'warning' = 'info') => {
-    const toast: Toast = {
-      id: `toast-${Date.now()}`,
-      type,
-      message,
-    };
-    setToasts(prev => [...prev, toast]);
-    
-    // Auto-remove after 5 seconds
-    setTimeout(() => {
-      setToasts(prev => prev.filter(t => t.id !== toast.id));
-    }, 5000);
+    const toast: Toast = { id: `toast-${Date.now()}-${Math.random()}`, type, message };
+    setToasts(prev => [...prev.slice(-3), toast]);
+    setTimeout(() => setToasts(prev => prev.filter(t => t.id !== toast.id)), 5000);
   };
 
+  // Append a new log line; never replace existing ones
   const updateSearchProgress = (progress: SearchProgress) => {
-    setSearchProgress(prev => {
-      const newMap = new Map(prev);
-      newMap.set(progress.searchRequestId, progress);
-      return newMap;
-    });
+    const entry: LogEntry = {
+      id: `log-${Date.now()}-${Math.random()}`,
+      searchRequestId: progress.searchRequestId,
+      stage:    progress.stage,
+      progress: progress.progress,
+      message:  progress.message,
+      timestamp: new Date(),
+    };
+    setLogEntries(prev => [...prev, entry]);
   };
 
-  const clearSearchProgress = (searchRequestId: string) => {
-    setSearchProgress(prev => {
-      const newMap = new Map(prev);
-      newMap.delete(searchRequestId);
-      return newMap;
-    });
+  // On complete/error, add a final entry but keep the log visible indefinitely
+  // Only clear when the user clicks "Clear"
+  const clearSearchProgress = (_searchRequestId: string) => {
+    // No-op: we no longer auto-clear — user clears manually
   };
 
-  // Get toast background color
-  const getToastColor = (type: string) => {
-    switch (type) {
-      case 'success':
-        return 'bg-green-500';
-      case 'error':
-        return 'bg-red-500';
-      case 'warning':
-        return 'bg-yellow-500';
-      default:
-        return 'bg-blue-500';
-    }
-  };
+  const clearLog = () => setLogEntries([]);
 
-  // Get toast icon
-  const getToastIcon = (type: string) => {
-    switch (type) {
-      case 'success':
-        return '✅';
-      case 'error':
-        return '❌';
-      case 'warning':
-        return '⚠️';
-      default:
-        return 'ℹ️';
-    }
-  };
+  const hasActivity = logEntries.length > 0;
+  // Is any search still running (last entry for that ID is not completed/failed)?
+  const activeIds = new Set(
+    logEntries
+      .filter(e => e.stage !== 'completed' && e.stage !== 'failed')
+      .map(e => e.searchRequestId)
+  );
+  const isRunning = activeIds.size > 0;
 
   return (
     <NotificationContext.Provider value={{ addNotification, showToast, updateSearchProgress, clearSearchProgress }}>
       {children}
-      
-      {/* Match Notifications */}
-      <div className="fixed top-0 right-0 z-50 p-4 space-y-4">
-        {notifications.map((notification) => (
-          <MatchNotification
-            key={notification.id}
-            product={notification.product}
-            onClose={() => removeNotification(notification.id)}
-          />
+
+      {/* ── Match notifications — top-right ── */}
+      <div
+        className="fixed top-4 right-4 z-50 flex flex-col gap-3 max-h-[80vh] overflow-y-auto pointer-events-none"
+        style={{ width: '22rem' }}
+      >
+        {notifications.map(n => (
+          <div key={n.id} className="pointer-events-auto">
+            <MatchNotification product={n.product} onClose={() => removeNotification(n.id)} />
+          </div>
         ))}
       </div>
 
-      {/* Toast Notifications */}
-      <div className="fixed bottom-4 right-4 z-50 space-y-2">
-        {toasts.map((toast) => (
+      {/* ── Toast notifications — bottom-right ── */}
+      <div className="fixed bottom-6 right-6 z-50 flex flex-col-reverse gap-2" style={{ width: '22rem' }}>
+        {toasts.map(toast => (
           <div
             key={toast.id}
-            className={`${getToastColor(toast.type)} text-white px-4 py-3 rounded-lg shadow-lg flex items-center space-x-2 animate-fade-in max-w-md`}
+            className={`${getToastBg(toast.type)} text-white px-4 py-3 rounded-lg shadow-lg flex items-start gap-2 animate-fade-in`}
           >
-            <span className="text-xl">{getToastIcon(toast.type)}</span>
-            <span className="flex-1">{toast.message}</span>
+            <span className="text-lg leading-tight shrink-0 mt-0.5">{getToastIcon(toast.type)}</span>
+            <span className="flex-1 text-sm leading-snug">{toast.message}</span>
             <button
               onClick={() => setToasts(prev => prev.filter(t => t.id !== toast.id))}
-              className="text-white hover:text-gray-200"
-            >
-              ✕
-            </button>
+              className="text-white/70 hover:text-white shrink-0 mt-0.5 text-lg leading-none"
+              aria-label="Dismiss"
+            >×</button>
           </div>
         ))}
       </div>
 
-      {/* Search Progress Indicators */}
-      <div className="fixed bottom-4 left-4 z-50 space-y-2">
-        {Array.from(searchProgress.values()).map((progress) => (
-          <div
-            key={progress.searchRequestId}
-            className="bg-white rounded-lg shadow-lg p-4 max-w-sm animate-fade-in"
-          >
-            <div className="flex items-center justify-between mb-2">
-              <span className="font-semibold text-gray-800">🤖 AI Search</span>
-              <span className="text-sm text-gray-500">{progress.progress}%</span>
-            </div>
-            <div className="w-full bg-gray-200 rounded-full h-2 mb-2">
-              <div
-                className="bg-blue-600 h-2 rounded-full transition-all duration-500"
-                style={{ width: `${progress.progress}%` }}
-              ></div>
-            </div>
-            <p className="text-sm text-gray-600">{progress.message}</p>
+      {/* ── Agent Activity Log — fixed top-left, below the nav bar ── */}
+      <div
+        className="fixed left-4 top-28 z-50 bg-white border border-gray-200 rounded-xl shadow-xl flex flex-col"
+        style={{ width: '26rem' }}
+      >
+        {/* Header */}
+        <div className="flex items-center justify-between px-4 py-2 border-b border-gray-100 bg-gray-50 rounded-t-xl shrink-0">
+          <div className="flex items-center gap-2">
+            <span className="text-base">🤖</span>
+            <span className="text-sm font-semibold text-gray-700">AI Agent Activity</span>
+            {isRunning && (
+              <span className="inline-flex h-2 w-2 rounded-full bg-blue-500 animate-pulse" />
+            )}
           </div>
-        ))}
+          <div className="flex items-center gap-1">
+            {hasActivity && (
+              <button
+                onClick={clearLog}
+                className="text-gray-400 hover:text-red-500 text-xs px-2 py-0.5 rounded hover:bg-gray-100 transition-colors"
+                title="Clear log"
+              >
+                Clear
+              </button>
+            )}
+            <button
+              onClick={() => setLogMinimised(v => !v)}
+              className="text-gray-400 hover:text-gray-600 text-xs font-medium px-2 py-0.5 rounded hover:bg-gray-100 transition-colors"
+              title={logMinimised ? 'Expand' : 'Minimise'}
+            >
+              {logMinimised ? '▲' : '▼'}
+            </button>
+          </div>
+        </div>
+
+        {/* Log lines — scrollable, never auto-cleared */}
+        {!logMinimised && (
+          <div className="overflow-y-auto px-3 py-2 space-y-1" style={{ maxHeight: '22rem' }}>
+            {hasActivity ? (
+              <>
+                {logEntries.map(entry => {
+                  const icon = stageIcon[entry.stage] ?? '⏳';
+                  const pct  = Math.min(100, Math.max(0, entry.progress));
+
+                  return (
+                    <div key={entry.id} className="text-xs border-b border-gray-50 pb-1.5 last:border-0">
+                      {/* Row: icon · stage · pct · time */}
+                      <div className="flex items-center gap-1.5">
+                        <span className="shrink-0">{icon}</span>
+                        <span className="font-medium text-gray-700 truncate flex-1">{entry.message}</span>
+                        <span className="shrink-0 text-gray-400">{pct}%</span>
+                        <span className="shrink-0 text-gray-300">{formatTime(entry.timestamp)}</span>
+                      </div>
+                      {/* Progress bar */}
+                      <div className="mt-1 w-full bg-gray-100 rounded-full h-1">
+                        <div
+                          className={`h-1 rounded-full transition-all duration-500 ${
+                            entry.stage === 'completed' ? 'bg-green-500' :
+                            entry.stage === 'failed'    ? 'bg-red-500'   : 'bg-blue-500'
+                          }`}
+                          style={{ width: `${pct}%` }}
+                        />
+                      </div>
+                    </div>
+                  );
+                })}
+                <div ref={logEndRef} />
+              </>
+            ) : (
+              <p className="text-xs text-gray-400 text-center py-4">
+                No active searches. Logs will appear here.
+              </p>
+            )}
+          </div>
+        )}
       </div>
     </NotificationContext.Provider>
   );

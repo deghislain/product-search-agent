@@ -12,10 +12,10 @@ export default function Layout({ children }: LayoutProps) {
   const isActive = (path: string) => location.pathname === path;
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen w-full bg-gray-50">
       {/* Header */}
       <header className="bg-white shadow">
-        <div className="max-w-7xl mx-auto px-4 py-4">
+        <div className="w-full max-w-7xl mx-auto px-6 py-4 flex justify-center">
           <h1 className="text-2xl font-bold text-gray-900">
             Product Search Agent
           </h1>
@@ -24,8 +24,8 @@ export default function Layout({ children }: LayoutProps) {
 
       {/* Navigation */}
       <nav className="bg-white border-b">
-        <div className="max-w-7xl mx-auto px-4">
-          <div className="flex space-x-8">
+        <div className="w-full max-w-7xl mx-auto px-6">
+          <div className="flex justify-center space-x-8">
             <Link
               to="/"
               className={`py-4 px-4 border-b-2 ${
@@ -61,13 +61,13 @@ export default function Layout({ children }: LayoutProps) {
       </nav>
 
       {/* Main Content */}
-      <main className="max-w-7xl mx-auto px-4 py-8">
+      <main className="w-full max-w-7xl mx-auto px-6 py-8">
         {children}
       </main>
 
       {/* Footer */}
       <footer className="bg-white border-t mt-auto">
-        <div className="max-w-7xl mx-auto px-4 py-4 text-center text-gray-600">
+        <div className="w-full max-w-7xl mx-auto px-6 py-4 text-center text-gray-600">
           <p>© 2026 Product Search Agent</p>
         </div>
       </footer>

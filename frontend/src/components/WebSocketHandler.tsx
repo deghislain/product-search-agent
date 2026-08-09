@@ -9,10 +9,15 @@ interface WebSocketMessage {
   product_name?: string;
   message?: string;
   timestamp?: string;
+  // search_progress fields — enriched by agentic pipeline
   stage?: string;
   progress?: number;
+  agent?: string;       // which agent sent the update (e.g. "SearchAgent")
+  // search_complete fields
   products_found?: number;
   matches_found?: number;
+  ranked_products_count?: number;
+  // new_match fields
   product?: {
     title: string;
     price: number;
@@ -27,7 +32,7 @@ interface WebSocketMessage {
 export default function WebSocketHandler() {
   const { addNotification, showToast, updateSearchProgress, clearSearchProgress } = useNotifications();
   const hasShownErrorRef = useRef(false);
-  const reconnectTimeoutRef = useRef<number>();
+  const reconnectTimeoutRef = useRef<number | undefined>(undefined);
 
   useEffect(() => {
     let ws: WebSocket | null = null;
@@ -82,29 +87,38 @@ export default function WebSocketHandler() {
                 }
                 break;
 
-              case 'search_progress':
+              case 'search_progress': {
                 if (data.search_request_id) {
+                  // Prefix message with agent name when present for clarity in the log
+                  const agentPrefix = data.agent ? `[${data.agent}] ` : '';
                   updateSearchProgress({
                     searchRequestId: data.search_request_id,
                     stage: data.stage || 'processing',
                     progress: data.progress || 0,
-                    message: data.message || 'Processing...',
+                    message: `${agentPrefix}${data.message || 'Processing...'}`,
                   });
                 }
                 break;
+              }
 
-              case 'search_complete':
+              case 'search_complete': {
+                const matchCount = data.matches_found ?? data.ranked_products_count ?? 0;
+                const totalCount = data.products_found ?? 0;
                 showToast(
-                  `✅ Search complete! Found ${data.matches_found || 0} matches out of ${data.products_found || 0} products.`,
+                  `✅ Search complete! Found ${matchCount} matches${totalCount ? ` out of ${totalCount} products` : ''}.`,
                   'success'
                 );
                 if (data.search_request_id) {
-                  // Keep progress visible for 2 seconds before clearing
-                  setTimeout(() => {
-                    clearSearchProgress(data.search_request_id!);
-                  }, 2000);
+                  // Append a final completed log line — stays visible until user clears
+                  updateSearchProgress({
+                    searchRequestId: data.search_request_id,
+                    stage: 'completed',
+                    progress: 100,
+                    message: `Done — ${matchCount} match${matchCount !== 1 ? 'es' : ''} found${totalCount ? ` out of ${totalCount} products` : ''}`,
+                  });
                 }
                 break;
+              }
 
               case 'new_match':
                 if (data.product) {
@@ -134,7 +148,13 @@ export default function WebSocketHandler() {
                   'error'
                 );
                 if (data.search_request_id) {
-                  clearSearchProgress(data.search_request_id);
+                  // Append a final failed log line — stays visible until user clears
+                  updateSearchProgress({
+                    searchRequestId: data.search_request_id,
+                    stage: 'failed',
+                    progress: 0,
+                    message: `Failed: ${data.error || data.message || 'Unknown error'}`,
+                  });
                 }
                 break;
 

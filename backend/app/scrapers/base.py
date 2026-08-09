@@ -12,6 +12,11 @@ import re
 import httpx
 import sys
 from pathlib import Path
+import logging
+
+
+logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__)
 
 # Add parent directory to path for imports when running as script
 if __name__ == "__main__":
