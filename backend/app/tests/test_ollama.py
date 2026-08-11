@@ -4,6 +4,7 @@ Run this before deploying to Render.com
 """
 import asyncio
 import sys
+import pytest
 from pathlib import Path
 
 # Add parent directory to Python path so we can import 'app' module
@@ -16,6 +17,7 @@ load_dotenv()
 from app.core.llm_client import GroqClient
 
 
+@pytest.mark.skip(reason="Live Groq API integration test — requires a valid GROQ_API_KEY and available rate limit. Run manually.")
 async def test_groq():
     """Test Groq API connection and generation."""
     print("🧪 Testing Groq Client...")

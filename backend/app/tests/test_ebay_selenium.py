@@ -39,8 +39,12 @@ mock_exceptions.NoSuchElementException = NoSuchElementException
 sys.modules['undetected_chromedriver'] = mock_uc
 sys.modules['selenium.webdriver.common.by'] = mock_by
 sys.modules['selenium.webdriver.support.ui'] = mock_wait
-sys.modules['selenium.webdriver.support'] = MagicMock()
-sys.modules['selenium.webdriver.support'].expected_conditions = mock_ec
+_mock_support = MagicMock()
+_mock_support.expected_conditions = mock_ec
+sys.modules['selenium.webdriver.support'] = _mock_support
+# Also stub out sub-modules of selenium.webdriver.support so that lazy
+# imports in selenium's own source (e.g. relative_locator) don't fail later.
+sys.modules['selenium.webdriver.support.relative_locator'] = MagicMock()
 sys.modules['selenium.common.exceptions'] = mock_exceptions
 
 # Now import the module
@@ -52,6 +56,9 @@ selenium_module.SELENIUM_AVAILABLE = True
 selenium_module.uc = mock_uc
 selenium_module.TimeoutException = TimeoutException
 selenium_module.NoSuchElementException = NoSuchElementException
+selenium_module.WebDriverWait = mock_wait.WebDriverWait
+selenium_module.EC = mock_ec
+selenium_module.By = mock_by
 
 from app.scrapers.ebay_selenium import EbaySeleniumScraper
 
@@ -150,7 +157,7 @@ async def test_search_basic(scraper, mock_driver):
     mock_driver.page_source = mock_html
     
     # Mock WebDriverWait
-    with patch('app.scrapers.ebay_selenium.WebDriverWait'):
+    with patch('selenium.webdriver.support.ui.WebDriverWait'):
         with patch('app.scrapers.ebay_selenium.time.sleep'):
             results = await scraper.search("iPhone 13", max_results=5)
     
@@ -178,7 +185,7 @@ async def test_search_with_price_filter(scraper, mock_driver):
     """
     mock_driver.page_source = mock_html
     
-    with patch('app.scrapers.ebay_selenium.WebDriverWait'):
+    with patch('selenium.webdriver.support.ui.WebDriverWait'):
         with patch('app.scrapers.ebay_selenium.time.sleep'):
             results = await scraper.search("laptop", min_price=500, max_price=1000, max_results=10)
     
@@ -191,7 +198,7 @@ async def test_search_with_price_filter(scraper, mock_driver):
 @pytest.mark.asyncio
 async def test_search_timeout(scraper, mock_driver):
     """Test search with timeout."""
-    with patch('app.scrapers.ebay_selenium.WebDriverWait', side_effect=TimeoutException):
+    with patch('selenium.webdriver.support.ui.WebDriverWait', side_effect=TimeoutException):
         with patch('app.scrapers.ebay_selenium.time.sleep'):
             results = await scraper.search("test")
     
@@ -240,7 +247,7 @@ async def test_get_product_details(scraper, mock_driver):
     """
     mock_driver.page_source = mock_html
     
-    with patch('app.scrapers.ebay_selenium.WebDriverWait'):
+    with patch('selenium.webdriver.support.ui.WebDriverWait'):
         with patch('app.scrapers.ebay_selenium.time.sleep'):
             details = await scraper.get_product_details("https://www.ebay.com/itm/123")
     

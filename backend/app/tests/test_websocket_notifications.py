@@ -6,12 +6,17 @@ Run this while the FastAPI server is running.
 Usage:
     Terminal 1: uvicorn app.main:app --reload
     Terminal 2: python test_websocket_notifications.py
+
+NOTE: This is a live-server integration test. It requires a running FastAPI
+      server on localhost:8000 and is therefore skipped in the standard pytest
+      suite. Run it manually as described above.
 """
 
 import asyncio
 import websockets
 import json
 import sys
+import pytest
 from pathlib import Path
 
 # Add parent directory to Python path so we can import 'app' module
@@ -23,6 +28,7 @@ from app.models.search_request import SearchRequest
 from app.core.orchestrator import SearchOrchestrator
 
 
+@pytest.mark.skip(reason="Live-server integration test — requires a running server on localhost:8000. Run manually: python test_websocket_notifications.py")
 async def test_websocket_notifications():
     """Test WebSocket notification flow"""
     

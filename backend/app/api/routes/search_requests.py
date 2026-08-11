@@ -203,6 +203,14 @@ async def execute_agent_search(search_request_id: str):
 
                 # ── Build a fresh ORM object with all required fields ─────────
                 from datetime import datetime as _dt
+                # Coerce posted_date to a datetime/date object (scrapers may return a string)
+                raw_posted = attrs.get('posted_date')
+                if isinstance(raw_posted, str):
+                    try:
+                        raw_posted = _dt.fromisoformat(raw_posted)
+                    except (ValueError, AttributeError):
+                        raw_posted = None
+
                 new_product = Product(
                     search_execution_id=execution.id,          # NOT NULL — set here
                     title=attrs.get('title', ''),
@@ -212,7 +220,7 @@ async def execute_agent_search(search_request_id: str):
                     image_url=attrs.get('image_url'),
                     platform=attrs.get('platform', ''),
                     location=attrs.get('location'),
-                    posted_date=attrs.get('posted_date'),
+                    posted_date=raw_posted,
                     match_score=overall_score,
                     is_match=overall_score >= search_request.match_threshold,
                     created_at=_dt.utcnow(),

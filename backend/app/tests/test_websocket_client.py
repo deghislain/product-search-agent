@@ -1,7 +1,10 @@
 import asyncio
 import websockets
 import json
+import pytest
 
+
+@pytest.mark.skip(reason="Live-server integration test — requires a running FastAPI server on localhost:8000. Run manually.")
 async def test_websocket():
     uri = "ws://localhost:8000/ws/notifications"
     

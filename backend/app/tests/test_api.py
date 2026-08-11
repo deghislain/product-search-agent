@@ -18,17 +18,29 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
+from sqlalchemy.pool import StaticPool
 from app.main import app
-from app.database import Base, get_db
+from app.database import Base
+from app.api.dependencies import get_db
 
 # Import all models to ensure they're registered with Base.metadata
 from app.models import SearchRequest, SearchExecution, Product, Notification
+from app.models.email_preference import EmailPreference
+from app.models.global_email_preference import GlobalEmailPreference
+from app.models.user_interaction import UserInteraction
+from app.models.user_preference import UserPreference
 
 @pytest.fixture(scope="function")
 def test_db():
     """Create test database and tables."""
-    # Use in-memory database for each test
-    engine = create_engine("sqlite:///:memory:", connect_args={"check_same_thread": False})
+    # Use in-memory database for each test.
+    # StaticPool ensures all connections share the same in-memory DB so
+    # tables created by create_all() are visible to later sessions.
+    engine = create_engine(
+        "sqlite:///:memory:",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
     TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
     
     # Create all tables
@@ -88,6 +100,7 @@ def test_list_search_requests(client):
     # First create a search request
     data = {
         "product_name": "Test Product",
+        "product_description": "Test description",
         "budget": 100.0,
         "location": "Test City"
     }
@@ -231,13 +244,15 @@ def test_delete_search_request(client):
     items = list_response.json()["items"]
     search_id = items[0]["id"]
     
-    # Delete it
+    # Delete it (soft-delete — sets status to cancelled, returns 204)
     response = client.delete(f"/api/search-requests/{search_id}")
     assert response.status_code == 204
     
-    # Verify it's deleted
+    # Soft-delete preserves the record; a subsequent GET still returns 200
+    # with the record in cancelled state (not a hard delete).
     get_response = client.get(f"/api/search-requests/{search_id}")
-    assert get_response.status_code == 404
+    assert get_response.status_code == 200
+    assert get_response.json()["status"] == "cancelled"
 
 
 def test_list_products(client):
@@ -251,7 +266,8 @@ def test_list_products(client):
 
 def test_list_matches(client):
     """Test listing matching products."""
-    response = client.get("/api/products/matches")
+    # The route requires a trailing slash
+    response = client.get("/api/products/matches/")
     assert response.status_code == 200
     result = response.json()
     assert "items" in result

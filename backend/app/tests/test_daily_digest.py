@@ -24,6 +24,9 @@ def mock_config():
     config.EMAIL_FROM = "test@example.com"
     config.EMAIL_FROM_NAME = "Test Product Search Agent"
     config.ENABLE_EMAIL_NOTIFICATIONS = True
+    config.EMAIL_MAX_RETRIES = 3
+    config.EMAIL_RETRY_DELAY = 1
+    config.EMAIL_TIMEOUT = 30
     return config
 
 
@@ -176,81 +179,72 @@ client = TestClient(test_app)
 @pytest.mark.asyncio
 async def test_send_digest_now_endpoint(mock_db):
     """Test POST /api/digest/send-now endpoint"""
-    with patch('app.api.routes.digest.EmailService') as mock_email_service_class:
-        with patch('app.api.routes.digest.get_db', return_value=mock_db):
-            # Mock email service
-            mock_service = Mock()
-            mock_service.prepare_daily_digest_data = AsyncMock(return_value={})
-            mock_email_service_class.return_value = mock_service
-            
-            # Call endpoint
-            response = client.post("/api/digest/send-now")
-            
-            # Verify response
-            assert response.status_code == 200
-            data = response.json()
-            assert data["status"] == "success"
-            assert "background" in data["message"].lower()
+    mock_service = Mock()
+    mock_service.prepare_daily_digest_data = AsyncMock(return_value={})
+    # The digest route calls get_email_service(settings) — patch that factory
+    with patch('app.api.routes.digest.get_email_service', return_value=mock_service):
+        # Call endpoint
+        response = client.post("/api/digest/send-now")
+        
+        # Verify response
+        assert response.status_code == 200
+        data = response.json()
+        assert data["status"] == "success"
+        assert "background" in data["message"].lower()
 
 
 @pytest.mark.asyncio
 async def test_preview_digest_endpoint_with_matches(mock_db):
     """Test GET /api/digest/preview endpoint with matches"""
-    with patch('app.api.routes.digest.EmailService') as mock_email_service_class:
-        with patch('app.api.routes.digest.get_db', return_value=mock_db):
-            # Mock product and search request
-            mock_product = Mock()
-            mock_product.title = "Test Product"
-            mock_product.price = 99.99
-            
-            mock_search_req = Mock()
-            mock_search_req.query = "test query"
-            
-            # Mock digest data
-            mock_digest_data = {
-                "user@example.com": [
-                    {
-                        'product': mock_product,
-                        'search_request': mock_search_req
-                    }
-                ]
+    # Mock product and search request
+    mock_product = Mock()
+    mock_product.title = "Test Product"
+    mock_product.price = 99.99
+    
+    mock_search_req = Mock()
+    mock_search_req.query = "test query"
+    
+    # Mock digest data
+    mock_digest_data = {
+        "user@example.com": [
+            {
+                'product': mock_product,
+                'search_request': mock_search_req
             }
-            
-            # Mock email service
-            mock_service = Mock()
-            mock_service.prepare_daily_digest_data = AsyncMock(return_value=mock_digest_data)
-            mock_email_service_class.return_value = mock_service
-            
-            # Call endpoint
-            response = client.get("/api/digest/preview")
-            
-            # Verify response
-            assert response.status_code == 200
-            data = response.json()
-            assert data["total_recipients"] == 1
-            assert len(data["recipients"]) == 1
-            assert data["recipients"][0]["email"] == "user@example.com"
-            assert data["recipients"][0]["match_count"] == 1
+        ]
+    }
+    
+    mock_service = Mock()
+    mock_service.prepare_daily_digest_data = AsyncMock(return_value=mock_digest_data)
+    # The digest route calls get_email_service(settings) — patch that factory
+    with patch('app.api.routes.digest.get_email_service', return_value=mock_service):
+        # Call endpoint
+        response = client.get("/api/digest/preview")
+        
+        # Verify response
+        assert response.status_code == 200
+        data = response.json()
+        assert data["total_recipients"] == 1
+        assert len(data["recipients"]) == 1
+        assert data["recipients"][0]["email"] == "user@example.com"
+        assert data["recipients"][0]["match_count"] == 1
 
 
 @pytest.mark.asyncio
 async def test_preview_digest_endpoint_no_matches(mock_db):
     """Test GET /api/digest/preview endpoint with no matches"""
-    with patch('app.api.routes.digest.EmailService') as mock_email_service_class:
-        with patch('app.api.routes.digest.get_db', return_value=mock_db):
-            # Mock empty digest data
-            mock_service = Mock()
-            mock_service.prepare_daily_digest_data = AsyncMock(return_value={})
-            mock_email_service_class.return_value = mock_service
-            
-            # Call endpoint
-            response = client.get("/api/digest/preview")
-            
-            # Verify response
-            assert response.status_code == 200
-            data = response.json()
-            assert data["total_recipients"] == 0
-            assert len(data["recipients"]) == 0
+    mock_service = Mock()
+    mock_service.prepare_daily_digest_data = AsyncMock(return_value={})
+    # The digest route calls get_email_service(settings) — patch that factory
+    with patch('app.api.routes.digest.get_email_service', return_value=mock_service):
+        # Call endpoint
+        response = client.get("/api/digest/preview")
+        
+        # Verify response
+        assert response.status_code == 200
+        data = response.json()
+        assert data["total_recipients"] == 0
+        assert len(data["recipients"]) == 0
 
 
 @pytest.mark.asyncio
@@ -294,38 +288,34 @@ async def test_send_digest_task_with_exception():
 @pytest.mark.asyncio
 async def test_preview_digest_with_multiple_matches(mock_db):
     """Test preview endpoint with multiple matches per user"""
-    with patch('app.api.routes.digest.EmailService') as mock_email_service_class:
-        with patch('app.api.routes.digest.get_db', return_value=mock_db):
-            # Create multiple mock products
-            matches = []
-            for i in range(10):
-                mock_product = Mock()
-                mock_product.title = f"Product {i}"
-                mock_product.price = 100.0 + i
-                
-                mock_search_req = Mock()
-                mock_search_req.query = f"query {i}"
-                
-                matches.append({
-                    'product': mock_product,
-                    'search_request': mock_search_req
-                })
-            
-            # Mock digest data
-            mock_digest_data = {"user@example.com": matches}
-            
-            # Mock email service
-            mock_service = Mock()
-            mock_service.prepare_daily_digest_data = AsyncMock(return_value=mock_digest_data)
-            mock_email_service_class.return_value = mock_service
-            
-            # Call endpoint
-            response = client.get("/api/digest/preview")
-            
-            # Verify response
-            assert response.status_code == 200
-            data = response.json()
-            assert data["total_recipients"] == 1
-            assert data["recipients"][0]["match_count"] == 10
-            # Should only show first 5 matches
-            assert len(data["recipients"][0]["matches"]) == 5
+    # Create multiple mock products
+    matches = []
+    for i in range(10):
+        mock_product = Mock()
+        mock_product.title = f"Product {i}"
+        mock_product.price = 100.0 + i
+
+        mock_search_req = Mock()
+        mock_search_req.query = f"query {i}"
+
+        matches.append({
+            'product': mock_product,
+            'search_request': mock_search_req
+        })
+
+    mock_digest_data = {"user@example.com": matches}
+
+    mock_service = Mock()
+    mock_service.prepare_daily_digest_data = AsyncMock(return_value=mock_digest_data)
+    # The digest route calls get_email_service(settings) — patch that factory
+    with patch('app.api.routes.digest.get_email_service', return_value=mock_service):
+        # Call endpoint
+        response = client.get("/api/digest/preview")
+
+        # Verify response
+        assert response.status_code == 200
+        data = response.json()
+        assert data["total_recipients"] == 1
+        assert data["recipients"][0]["match_count"] == 10
+        # Should only show first 5 matches
+        assert len(data["recipients"][0]["matches"]) == 5

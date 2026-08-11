@@ -339,7 +339,8 @@ async def test_search_platform_all_retries_exhausted(orchestrator, sample_search
     # Verify it tried 3 times
     assert mock_scraper.search.call_count == 3
 
-def test_match_products(orchestrator, sample_search_request):
+@pytest.mark.asyncio
+async def test_match_products(orchestrator, sample_search_request):
     """Test _match_products method."""
     # Mock products
     mock_products = [
@@ -353,7 +354,7 @@ def test_match_products(orchestrator, sample_search_request):
         'find_matches',
         return_value=mock_products
     ) as mock_find_matches:
-        result = orchestrator._match_products(sample_search_request, mock_products)
+        result = await orchestrator._match_products(sample_search_request, mock_products)
         
         # Verify matching engine was called
         mock_find_matches.assert_called_once_with(
@@ -365,15 +366,17 @@ def test_match_products(orchestrator, sample_search_request):
         assert result == mock_products
 
 def test_get_active_platforms_none_enabled(orchestrator, sample_search_request):
-    """Test getting platforms when none are enabled."""
+    """Test getting platforms when none are enabled defaults to all platforms."""
     sample_search_request.search_craigslist = False
     sample_search_request.search_ebay = False
     sample_search_request.search_facebook = False
     
     platforms = orchestrator._get_active_platforms(sample_search_request)
     
-    assert len(platforms) == 0
-    assert platforms == []
+    # When no platforms are explicitly selected, the orchestrator searches all
+    # platforms by default to ensure users always get results.
+    assert len(platforms) == 3
+    assert set(platforms) == {'craigslist', 'ebay', 'facebook'}
 
 @pytest.mark.asyncio
 async def test_save_products_with_optional_fields(orchestrator, mock_db):

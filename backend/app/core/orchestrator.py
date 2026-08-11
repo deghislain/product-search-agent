@@ -545,20 +545,55 @@ class SearchOrchestrator:
         logger.info(f"Saving {len(products)} products to database")
         
         for product in products:
+            # Normalise: accept both Product ORM objects and plain dicts
+            if isinstance(product, dict):
+                url = product.get('url', '')
+                price = product.get('price', 0.0)
+                match_score = product.get('match_score')
+                title = product.get('title', '')
+            else:
+                url = product.url
+                price = product.price
+                match_score = product.match_score
+                title = product.title
+
+            if not url:
+                logger.warning("Skipping product with no URL")
+                continue
+
             # Check if product already exists (duplicate detection using URL)
             existing_product = self.db.query(Product).filter(
-                Product.url == product.url
+                Product.url == url
             ).first()
             
             if existing_product:
                 # Update existing product
-                existing_product.price = product.price
+                existing_product.price = price
                 existing_product.is_match = True
-                existing_product.match_score = product.match_score
+                existing_product.match_score = match_score
                 # Update search_execution_id to associate with current search
                 existing_product.search_execution_id = execution_id
                 logger.debug(f"Updated existing product {existing_product.id}")
             else:
+                if isinstance(product, dict):
+                    # Build a Product ORM object from the raw dict
+                    raw_posted = product.get('posted_date')
+                    if isinstance(raw_posted, str):
+                        try:
+                            raw_posted = datetime.fromisoformat(raw_posted)
+                        except (ValueError, AttributeError):
+                            raw_posted = None
+                    product = Product(
+                        title=title,
+                        description=product.get('description'),
+                        price=float(price or 0.0),
+                        url=url,
+                        image_url=product.get('image_url'),
+                        platform=product.get('platform', ''),
+                        location=product.get('location'),
+                        posted_date=raw_posted,
+                    )
+
                 # Set the search_execution_id for the new product
                 product.search_execution_id = execution_id
                 # Mark as match since it passed the threshold

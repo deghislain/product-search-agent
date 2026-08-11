@@ -99,8 +99,9 @@ async def test_email_service_send(monkeypatch):
         pytest.skip("No email provider configured")
     
     # Mock httpx.AsyncClient for HTTP providers
+    # SendGrid returns 202 Accepted on success; 200 is treated as an error.
     mock_response = Mock()
-    mock_response.status_code = 200
+    mock_response.status_code = 202
     mock_response.json.return_value = {"message": "success"}
     
     async def mock_post(*args, **kwargs):

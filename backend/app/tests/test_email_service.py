@@ -20,6 +20,9 @@ def mock_config():
     config.EMAIL_FROM = "test@example.com"
     config.EMAIL_FROM_NAME = "Test Product Search Agent"
     config.ENABLE_EMAIL_NOTIFICATIONS = True
+    config.EMAIL_MAX_RETRIES = 3
+    config.EMAIL_RETRY_DELAY = 1
+    config.EMAIL_TIMEOUT = 30
     return config
 
 
@@ -356,8 +359,8 @@ async def test_send_email_smtp_error(mock_smtp_class, email_service):
     mock_smtp_instance.login.side_effect = Exception("SMTP connection failed")
     mock_smtp_class.return_value.__aenter__.return_value = mock_smtp_instance
     
-    # Should raise exception
-    with pytest.raises(Exception, match="Failed to send email"):
+    # Should raise an exception (the SMTP error propagates up)
+    with pytest.raises(Exception, match="SMTP connection failed"):
         await email_service.send_email(
             to_email="recipient@example.com",
             subject="Test Subject",

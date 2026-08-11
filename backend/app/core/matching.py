@@ -53,8 +53,12 @@ class ProductMatcher:
             if not products:
                 return []
             
-            # Use the search request's match threshold (not the hardcoded one)
+            # Use the search request's match threshold; fall back to the engine's
+            # configured minimum if the attribute is None (e.g. in unit tests where
+            # ORM column defaults haven't been applied by a DB INSERT).
             threshold = search_request.match_threshold
+            if threshold is None:
+                threshold = self.min_score_threshold
             
             # Step 1: Calculate scores
             products = self._calculate_scores_for_products(products, search_request)

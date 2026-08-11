@@ -16,6 +16,8 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from app.scrapers.craigslist import CraigslistScraper
 
+@pytest.mark.integration
+@pytest.mark.skip(reason="Live HTTP integration test — requires network access to Craigslist. Run manually: pytest -m integration")
 @pytest.mark.asyncio
 async def test_all():
     """Run all tests in sequence."""

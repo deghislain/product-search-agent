@@ -21,6 +21,9 @@ class TestWebSocketConnection:
         client = TestClient(app)
         
         with client.websocket_connect("/ws/notifications") as websocket:
+            # Drain the initial connection-confirmation JSON sent by the endpoint
+            websocket.receive_text()
+            
             # Send ping message
             websocket.send_text("ping")
             
@@ -33,12 +36,12 @@ class TestWebSocketConnection:
         client = TestClient(app)
         
         with client.websocket_connect("/ws/notifications") as websocket:
-            # Send non-ping message
-            websocket.send_text("hello")
+            # Drain the initial connection-confirmation JSON sent by the endpoint
+            websocket.receive_text()
             
-            # Receive echo response
-            data = websocket.receive_text()
-            assert "Connected: hello" in data
+            # Send non-ping message (endpoint doesn't echo non-ping messages;
+            # only logs them — so just verify no exception is raised)
+            websocket.send_text("hello")
     
     def test_websocket_multiple_connections(self):
         """Test multiple WebSocket connections"""
@@ -46,11 +49,15 @@ class TestWebSocketConnection:
         
         with client.websocket_connect("/ws/notifications") as ws1:
             with client.websocket_connect("/ws/notifications") as ws2:
-                # Send messages to both
+                # Drain connection-confirmation messages
+                ws1.receive_text()
+                ws2.receive_text()
+                
+                # Send ping to both
                 ws1.send_text("ping")
                 ws2.send_text("ping")
                 
-                # Both should respond
+                # Both should respond with pong
                 assert ws1.receive_text() == "pong"
                 assert ws2.receive_text() == "pong"
     
@@ -60,6 +67,8 @@ class TestWebSocketConnection:
         
         # Connect and disconnect
         with client.websocket_connect("/ws/notifications") as websocket:
+            # Drain connection-confirmation message
+            websocket.receive_text()
             websocket.send_text("ping")
             assert websocket.receive_text() == "pong"
         
@@ -260,6 +269,8 @@ class TestWebSocketEndpoint:
         # Should be able to connect
         with client.websocket_connect("/ws/notifications") as websocket:
             assert websocket is not None
+            # Drain the initial connection-confirmation JSON sent by the endpoint
+            websocket.receive_text()
             # Send a message to verify connection works
             websocket.send_text("ping")
             response = websocket.receive_text()
@@ -286,8 +297,9 @@ class TestWebSocketEndpoint:
         sent_messages = []
         async def send_side_effect(msg):
             sent_messages.append(msg)
-            # After first heartbeat, raise disconnect
-            if len(sent_messages) >= 1:
+            # Allow the connection-confirmation through; raise disconnect after heartbeat
+            msg_parsed = json.loads(msg) if msg.startswith('{') else {}
+            if msg_parsed.get('type') == 'heartbeat':
                 from fastapi import WebSocketDisconnect
                 raise WebSocketDisconnect()
         
@@ -316,9 +328,10 @@ class TestWebSocketEndpoint:
             if mock_ws in manager.active_connections:
                 manager.active_connections.remove(mock_ws)
         
-        # Verify heartbeat was sent
-        assert len(sent_messages) > 0
-        heartbeat = json.loads(sent_messages[0])
+        # Verify heartbeat was sent (sent_messages[0] is the connection-confirmation;
+        # sent_messages[1] is the heartbeat triggered by the timeout)
+        assert len(sent_messages) >= 2
+        heartbeat = json.loads(sent_messages[1])
         assert heartbeat["type"] == "heartbeat"
         assert "timestamp" in heartbeat
 
@@ -332,14 +345,12 @@ class TestWebSocketIntegration:
         
         # Connect
         with client.websocket_connect("/ws/notifications") as websocket:
+            # Drain the initial connection-confirmation JSON sent by the endpoint
+            websocket.receive_text()
+            
             # Send ping
             websocket.send_text("ping")
             assert websocket.receive_text() == "pong"
-            
-            # Send custom message
-            websocket.send_text("test message")
-            response = websocket.receive_text()
-            assert "Connected: test message" in response
         
         # After context manager, connection should be closed
     
@@ -356,11 +367,15 @@ class TestWebSocketIntegration:
             connections.append(ws)
         
         try:
-            # Send messages to all
+            # Drain connection-confirmation messages from each connection
+            for ws in connections:
+                ws.receive_text()
+            
+            # Send ping to all connections
             for i, ws in enumerate(connections):
-                ws.send_text(f"message_{i}")
+                ws.send_text("ping")
                 response = ws.receive_text()
-                assert f"Connected: message_{i}" in response
+                assert response == "pong"
         finally:
             # Clean up
             for ws in connections:
@@ -372,13 +387,13 @@ class TestWebSocketErrorHandling:
     
     @pytest.mark.asyncio
     async def test_disconnect_nonexistent_connection(self):
-        """Test disconnecting a connection that doesn't exist"""
+        """Test disconnecting a connection that doesn't exist is handled gracefully"""
         connection_manager = ConnectionManager()
         mock_websocket = Mock(spec=WebSocket)
         
-        # Should raise ValueError when trying to remove non-existent connection
-        with pytest.raises(ValueError):
-            connection_manager.disconnect(mock_websocket)
+        # disconnect() intentionally swallows ValueError for connections that
+        # were never added (or already removed) — it must not raise.
+        connection_manager.disconnect(mock_websocket)  # Should not raise
     
     @pytest.mark.asyncio
     async def test_send_to_closed_connection(self):

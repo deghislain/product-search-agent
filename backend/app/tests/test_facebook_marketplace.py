@@ -65,19 +65,20 @@ async def test_scraper_initialization_not_headless():
 def test_setup_driver():
     """Test driver setup with mocked webdriver."""
     scraper = FacebookMarketplaceScraper(headless=True)
-    
+
     # Create a mock stealth function
     mock_stealth_func = Mock()
-    
+
     with patch('app.scrapers.facebook_marketplace.webdriver.Chrome') as mock_chrome:
-        # Mock the selenium_stealth module
-        with patch('selenium_stealth.stealth', mock_stealth_func):
+        # Inject a fake selenium_stealth module so the `from selenium_stealth import stealth`
+        # inside _setup_driver resolves without requiring the real package.
+        with patch.dict('sys.modules', {'selenium_stealth': Mock(stealth=mock_stealth_func)}):
             mock_driver = Mock()
             mock_driver.execute_cdp_cmd = Mock()
             mock_chrome.return_value = mock_driver
-            
+
             scraper._setup_driver()
-            
+
             assert scraper.driver is not None
             mock_chrome.assert_called_once()
             mock_stealth_func.assert_called_once()

@@ -2,6 +2,12 @@
 Tests for Craigslist Scraper
 
 Comprehensive test suite for CraigslistScraper functionality.
+
+NOTE: Tests in this file make live HTTP requests to Craigslist and are
+      therefore marked as integration tests. They are skipped in the standard
+      pytest suite and must be run manually or in a CI environment with network
+      access:
+          pytest -m integration app/tests/test_craigslist1.py
 """
 
 import asyncio
@@ -26,6 +32,8 @@ from app.scrapers.craigslist import CraigslistScraper
 from app.utils.rate_limiter import RateLimiter
 
 
+@pytest.mark.integration
+@pytest.mark.skip(reason="Live HTTP integration test — requires network access to Craigslist. Run manually: pytest -m integration")
 class TestCraigslistScraper:
     """Test suite for Craigslist scraper."""
     
