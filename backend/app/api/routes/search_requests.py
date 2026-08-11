@@ -47,6 +47,37 @@ router = APIRouter(
 )
 
 
+
+def _friendly_error_message(exc: Exception) -> str:
+    """
+    Convert a raw exception into a short, user-facing message suitable for
+    display in the AI Agent Activity panel.  Technical details stay in the
+    server logs only.
+    """
+    msg = str(exc)
+    # Database / transaction errors
+    if "rolled back" in msg or "transaction" in msg.lower():
+        return "The search encountered a database error. Please try again."
+    if "no such table" in msg.lower():
+        return "A database setup issue was detected. Please contact support."
+    if "DateTime" in msg or "date" in msg.lower() and "object" in msg.lower():
+        return "Some product data had an unexpected format and could not be saved. The search has been recorded."
+    if "OperationalError" in type(exc).__name__ or "IntegrityError" in type(exc).__name__:
+        return "A database error occurred while saving results. Please try again."
+    # Network / scraper errors
+    if "timeout" in msg.lower() or "TimeoutError" in type(exc).__name__:
+        return "The search timed out while fetching results. Please try again."
+    if "ConnectionError" in type(exc).__name__ or "connection" in msg.lower():
+        return "Could not connect to one or more search platforms. Please try again later."
+    # API / LLM errors
+    if "rate limit" in msg.lower() or "429" in msg:
+        return "The AI service is temporarily busy. Please try again in a few minutes."
+    if "api key" in msg.lower() or "authentication" in msg.lower() or "401" in msg:
+        return "There is a configuration issue with the AI service. Please contact support."
+    # Generic fallback — never expose raw tracebacks or DB internals
+    return "An unexpected error occurred during the search. Please try again."
+
+
 # ============================================================================
 # Helper Functions for Phase 2 Agent Execution
 # ============================================================================
@@ -324,14 +355,16 @@ async def execute_agent_search(search_request_id: str):
         
     except Exception as e:
         logger.error(f"❌ Error in AI search execution: {e}", exc_info=True)
-        
+
+        # Build a user-friendly message; keep the technical detail only in logs.
+        friendly_message = _friendly_error_message(e)
+
         # Send error notification
         await manager.broadcast({
             'type': 'search_error',
             'search_request_id': search_request_id,
             'status': 'failed',
-            'error': str(e),
-            'message': f'Search failed: {str(e)}',
+            'message': friendly_message,
             'timestamp': datetime.now(timezone.utc).isoformat()
         })
         
